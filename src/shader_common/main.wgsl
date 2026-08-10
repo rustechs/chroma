@@ -58,10 +58,25 @@ fn compute_pattern(uv: vec2<f32>, time: f32, pattern_type: u32) -> vec2<f32> {
 
 fn pattern_position_for_scale(position: vec2<f32>, scale: f32, pattern_type: u32) -> vec2<f32> {
     if pattern_type == 16u || pattern_type == 22u || pattern_type == 24u || pattern_type == 25u {
-        return (position - vec2<f32>(0.5, 0.5)) * scale + vec2<f32>(0.5, 0.5);
+        let center = effect_center();
+        return (position - center) * scale + center;
     }
 
     return position * scale;
+}
+
+/// Pull UVs toward the mouse so patterns warp under the cursor.
+fn apply_mouse_warp(uv: vec2<f32>) -> vec2<f32> {
+    let influence = uniforms.mouse_influence;
+    if influence < 0.01 {
+        return uv;
+    }
+
+    let mouse = effect_center();
+    let offset = uv - mouse;
+    let dist = length(offset);
+    let pull = influence * 0.35 * exp(-dist * 3.5);
+    return uv - offset * pull;
 }
 
 fn pattern_position(position: vec2<f32>, pattern_type: u32) -> vec2<f32> {
@@ -74,6 +89,9 @@ fn plasma_effect(position: vec2<f32>, time: f32) -> vec3<f32> {
     
     // Then apply beat-reactive distortion to position for visual pop effect
     processed_position = apply_beat_distortion(processed_position, time);
+
+    // Cursor attractor warp (all patterns)
+    processed_position = apply_mouse_warp(processed_position);
     
     let uv = pattern_position(processed_position, uniforms.pattern_type);
     
@@ -93,9 +111,16 @@ fn plasma_effect(position: vec2<f32>, time: f32) -> vec3<f32> {
     
     // Apply beat flash for additional pop emphasis
     color = apply_beat_flash(color, position, time);
+
+    // Soft glow near the cursor while interacting
+    if uniforms.mouse_influence > 0.01 {
+        let mouse = effect_center();
+        let glow = exp(-distance(position, mouse) * 6.0) * uniforms.mouse_influence * 0.2;
+        color = color * (1.0 + glow);
+    }
     
     if uniforms.vignette > 0.0 {
-        let center_dist = distance(position, vec2<f32>(0.5, 0.5));
+        let center_dist = distance(position, effect_center());
         let vignette_amount = smoothstep(
             uniforms.vignette,
             uniforms.vignette + uniforms.vignette_softness,

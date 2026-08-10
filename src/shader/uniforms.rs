@@ -39,7 +39,10 @@ pub struct ShaderUniforms {
   pub beat_distortion_time: f32,
   pub beat_distortion_strength: f32,
   pub beat_zoom_strength: f32,
-  _padding2: [u32; 3], // Need 12 bytes padding to align vec3 to 16-byte boundary
+  /// Mouse UV X/Y + influence fill the former padding before background_tint (16-byte aligned).
+  pub mouse_x: f32,
+  pub mouse_y: f32,
+  pub mouse_influence: f32,
   pub background_tint: [f32; 3],
   _padding3: u32,
 }
@@ -84,7 +87,9 @@ impl ShaderUniforms {
       beat_distortion_time: params.beat_distortion_time,
       beat_distortion_strength: params.beat_distortion_strength,
       beat_zoom_strength: params.beat_zoom_strength,
-      _padding2: [0; 3],
+      mouse_x: params.mouse_x,
+      mouse_y: params.mouse_y,
+      mouse_influence: params.mouse_influence,
       background_tint: [
         params.background_tint_r,
         params.background_tint_g,
@@ -143,6 +148,9 @@ mod tests {
       beat_distortion_time: 6.5,
       beat_distortion_strength: 0.95,
       beat_zoom_strength: 0.55,
+      mouse_x: 0.25,
+      mouse_y: 0.75,
+      mouse_influence: 1.5,
       background_tint_r: 0.1,
       background_tint_g: 0.2,
       background_tint_b: 0.3,
@@ -178,6 +186,9 @@ mod tests {
     assert_eq!(uniforms.beat_distortion_time, 6.5);
     assert_eq!(uniforms.beat_distortion_strength, 0.95);
     assert_eq!(uniforms.beat_zoom_strength, 0.55);
+    assert_eq!(uniforms.mouse_x, 0.25);
+    assert_eq!(uniforms.mouse_y, 0.75);
+    assert_eq!(uniforms.mouse_influence, 1.5);
     assert_eq!(uniforms.background_tint, [0.1, 0.2, 0.3]);
   }
 

@@ -73,6 +73,41 @@ Save the current configuration to a file in the working directory.
 - `O` - Previous palette
 - Effect: Change ASCII character set and color rendering
 
+## Mouse Controls
+
+Mouse capture is enabled in interactive mode (not `--stream`).
+
+### Move
+
+- Patterns warp toward the cursor (attractor)
+- Beat ripples, zoom, flash, vignette, and overlay effects center on the pointer
+- Soft glow near the cursor while hovering
+
+### Left click
+
+- Randomize parameters (same as `R`)
+- Stronger local warp while pressed
+
+### Right click
+
+- Cycle visual effect (same as `N`)
+
+### Left drag
+
+- Horizontal: adjust hue
+- Vertical: adjust scale
+
+### Scroll wheel
+
+- Scroll up: increase scale
+- Scroll down: decrease scale
+
+### Leave / gain focus
+
+- Focus lost: attractor softly springs back to screen center while influence fades (~0.3s)
+- Focus gained: after the next mouse move, attractor springs from center toward the cursor while influence eases in
+- Fresh mouse input during a return cancels it and starts the enter transition
+
 ## Status Bar
 
 The status bar at the bottom shows:

@@ -7,7 +7,7 @@ fn apply_effect(position: vec2<f32>, uv: vec2<f32>, color: vec3<f32>, time: f32)
         return color;
     }
     
-    let center = vec2<f32>(0.5, 0.5);
+    let center = effect_center();
     let dist_from_center = distance(position, center);
     
     let expansion_speed = 0.5;
