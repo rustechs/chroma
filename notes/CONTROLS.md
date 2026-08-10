@@ -56,12 +56,12 @@ Save the current configuration to a file in the working directory.
 - Range: 0.1 → 5.0
 - Effect: Change pattern size
 
-### Gravity
+### Gravity (Pattern Droop)
 
-- `g` - Increase gravity (+0.1)
-- `G` - Decrease gravity (-0.1)
-- Range: 0.0 → 2.0
-- Effect: Pulls the pattern downward. Mouse movement/click fights the fall but cannot cancel it (capped at 75% of gravity).
+- `g` - Increase gravity (+1.0)
+- `G` - Decrease gravity (-1.0)
+- Range: 0.0 → 100.0
+- Effect: Spatial downward droop (UV sag). Mouse movement/click fights the droop but cannot cancel it (capped at 75% of gravity).
 - CLI: `--gravity FLOAT`, `--mouse-fight FLOAT`
 
 ### Pattern Type

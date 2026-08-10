@@ -57,12 +57,12 @@ Controls the zoom level of the shader pattern.
 
 ### Gravity
 
-Controls downward pattern scroll. Default is off (`0.0`).
+Controls spatial pattern droop (downward UV sag). Default is off (`0.0`).
 
-- Range: 0.0 to 2.0
-- CLI: `--gravity FLOAT`, `--mouse-fight FLOAT`
+- Range: 0.0 to 100.0
+- CLI: `--gravity FLOAT`, `--mouse-fight FLOAT` (omit `--gravity` to leave gravity off)
 - Keys: `g` / `G`
-- Mouse movement and click fight the fall but cannot cancel it (capped below full gravity). Interactive sessions enable mouse capture so live gravity adjustments can receive pointer input.
+- Mouse movement and click fight the droop but cannot cancel it (capped below full gravity). Interactive sessions enable mouse capture so live gravity adjustments can receive pointer input.
 
 ### Mouse
 
