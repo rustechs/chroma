@@ -147,6 +147,10 @@ fn handle_key_press(
     KeyCode::Char('[') => params.adjust_scale(-PARAMETER_STEP),
     KeyCode::Char(']') => params.adjust_scale(PARAMETER_STEP),
 
+    // Gravity
+    KeyCode::Char('g') => params.adjust_gravity(PARAMETER_STEP),
+    KeyCode::Char('G') => params.adjust_gravity(-PARAMETER_STEP),
+
     // Pattern selection
     KeyCode::Char('t') | KeyCode::Char('T') => {
       params.pattern_type = params.pattern_type.next();
@@ -618,6 +622,37 @@ mod tests {
 
     assert_eq!(params.effect_type, 6);
     assert_eq!(params.effect_time, 12.0);
+  }
+
+  #[test]
+  fn test_gravity_keys_adjust_strength() {
+    let mut params = ShaderParams {
+      gravity: 0.5,
+      ..ShaderParams::default()
+    };
+    let mut converter = AsciiConverter::new(AsciiPalette::from(params.palette), true);
+    let mut running = true;
+    let mut debug_log = test_debug_log();
+
+    invoke_key(
+      KeyCode::Char('g'),
+      KeyModifiers::NONE,
+      &mut params,
+      &mut converter,
+      &mut running,
+      &mut debug_log,
+    );
+    assert!((params.gravity - 0.6).abs() < 1e-5);
+
+    invoke_key(
+      KeyCode::Char('G'),
+      KeyModifiers::NONE,
+      &mut params,
+      &mut converter,
+      &mut running,
+      &mut debug_log,
+    );
+    assert!((params.gravity - 0.5).abs() < 1e-5);
   }
 
   #[test]

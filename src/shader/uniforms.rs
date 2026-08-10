@@ -2,6 +2,11 @@ use bytemuck::{Pod, Zeroable};
 
 use crate::params::ShaderParams;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct InteractionUniforms {
+  pub gravity_offset: [f32; 2],
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct ShaderUniforms {
@@ -39,16 +44,27 @@ pub struct ShaderUniforms {
   pub beat_distortion_time: f32,
   pub beat_distortion_strength: f32,
   pub beat_zoom_strength: f32,
-  /// Mouse UV X/Y + influence fill the former padding before background_tint (16-byte aligned).
+  pub gravity: f32,
+
+  pub gravity_offset: [f32; 2],
   pub mouse_x: f32,
   pub mouse_y: f32,
   pub mouse_influence: f32,
+  // Align background_tint (vec3) to a 16-byte boundary.
+  _padding2: u32,
   pub background_tint: [f32; 3],
   _padding3: u32,
 }
 
 impl ShaderUniforms {
   pub fn from_params(params: &ShaderParams) -> Self {
+    Self::from_params_with_interaction(params, InteractionUniforms::default())
+  }
+
+  pub fn from_params_with_interaction(
+    params: &ShaderParams,
+    interaction: InteractionUniforms,
+  ) -> Self {
     Self {
       time: params.time,
       _padding1: 0,
@@ -87,9 +103,13 @@ impl ShaderUniforms {
       beat_distortion_time: params.beat_distortion_time,
       beat_distortion_strength: params.beat_distortion_strength,
       beat_zoom_strength: params.beat_zoom_strength,
+      gravity: params.gravity,
+
+      gravity_offset: interaction.gravity_offset,
       mouse_x: params.mouse_x,
       mouse_y: params.mouse_y,
       mouse_influence: params.mouse_influence,
+      _padding2: 0,
       background_tint: [
         params.background_tint_r,
         params.background_tint_g,
@@ -115,6 +135,7 @@ mod tests {
     assert_eq!(uniforms.time, 0.0);
     assert_eq!(uniforms.resolution[0], 80.0);
     assert_eq!(uniforms.resolution[1], 24.0);
+    assert_eq!(uniforms.gravity, 0.0);
   }
 
   #[test]
@@ -148,6 +169,8 @@ mod tests {
       beat_distortion_time: 6.5,
       beat_distortion_strength: 0.95,
       beat_zoom_strength: 0.55,
+      gravity: 0.8,
+      mouse_fight: 0.7,
       mouse_x: 0.25,
       mouse_y: 0.75,
       mouse_influence: 1.5,
@@ -157,7 +180,10 @@ mod tests {
       ..ShaderParams::default()
     };
 
-    let uniforms = ShaderUniforms::from_params(&params);
+    let interaction = InteractionUniforms {
+      gravity_offset: [0.15, 0.25],
+    };
+    let uniforms = ShaderUniforms::from_params_with_interaction(&params, interaction);
 
     assert_eq!(uniforms.time, 12.5);
     assert_eq!(uniforms.resolution, [132.0, 41.0]);
@@ -186,6 +212,8 @@ mod tests {
     assert_eq!(uniforms.beat_distortion_time, 6.5);
     assert_eq!(uniforms.beat_distortion_strength, 0.95);
     assert_eq!(uniforms.beat_zoom_strength, 0.55);
+    assert_eq!(uniforms.gravity, 0.8);
+    assert_eq!(uniforms.gravity_offset, [0.15, 0.25]);
     assert_eq!(uniforms.mouse_x, 0.25);
     assert_eq!(uniforms.mouse_y, 0.75);
     assert_eq!(uniforms.mouse_influence, 1.5);
@@ -194,7 +222,7 @@ mod tests {
 
   #[test]
   fn test_uniforms_layout_matches_expected_alignment() {
-    assert_eq!(mem::size_of::<ShaderUniforms>(), 144);
+    assert_eq!(mem::size_of::<ShaderUniforms>(), 160);
     assert_eq!(mem::align_of::<ShaderUniforms>(), 4);
     assert_eq!(mem::size_of::<ShaderUniforms>() % 16, 0);
   }

@@ -33,6 +33,11 @@ struct Uniforms {
     beat_distortion_time: f32,
     beat_distortion_strength: f32,
     beat_zoom_strength: f32,
+    gravity: f32,
+    gravity_offset: vec2<f32>,
+    mouse_x: f32,
+    mouse_y: f32,
+    mouse_influence: f32,
     background_tint: vec3<f32>,
 }
 
