@@ -18,8 +18,8 @@ This project avoids unnecessary complexity:
 │                   Main Application                       │
 │                                                          │
 │  ┌────────────┐  ┌──────────────┐  ┌─────────────┐     │
-│  │   Config   │  │  File Watch  │  │   Keyboard  │     │
-│  │   Loader   │  │   (notify)   │  │   Input     │     │
+│  │   Config   │  │  File Watch  │  │ Keyboard /  │     │
+│  │   Loader   │  │   (notify)   │  │ Mouse+Focus │     │
 │  └──────┬─────┘  └──────┬───────┘  └──────┬──────┘     │
 │         │                │                  │            │
 │         └────────────────┴──────────────────┘            │
@@ -86,33 +86,37 @@ This project avoids unnecessary complexity:
 ### Frame Rendering Cycle (60 FPS default)
 
 ```
-1. Check for config file changes
+1. Poll keyboard / mouse / focus events (interactive mode)
    ↓
-2. Load updated parameters (if changed)
+2. Tick mouse enter/return spring toward target UV + influence
    ↓
-3. Update time uniform
+3. Check for config file changes / apply reload
    ↓
-4. Convert params → uniforms (CPU)
+4. Update time + audio-reactive params
    ↓
-5. Upload uniforms to GPU
+5. Convert params → uniforms (CPU), including mouse_x/y/influence
    ↓
-6. Dispatch compute shader (GPU)
+6. Upload uniforms to GPU
    ↓
-7. Copy output buffer → staging buffer
+7. Dispatch compute shader (GPU)
    ↓
-8. Map staging buffer (GPU → CPU)
+8. Copy output buffer → staging buffer
    ↓
-9. Convert float RGBA → u8 RGBA
+9. Map staging buffer (GPU → CPU)
    ↓
-10. For each pixel:
+10. Convert float RGBA → u8 RGBA
+   ↓
+11. For each pixel:
     - Calculate brightness
     - Map to ASCII character
     - Determine ANSI color
    ↓
-11. Render to terminal
+12. Render to terminal
    ↓
-12. Sleep until next frame
+13. Sleep until next frame
 ```
+
+Interactive terminal setup enables crossterm mouse capture and focus reporting; cleanup disables both. Stream mode skips terminal setup/input. Mouse UV drives `effect_center()` and an attractor warp while `mouse_influence > 0`.
 
 ### Config Reload Flow
 
@@ -139,6 +143,22 @@ Next frame uses new parameters
 - Terminal setup/cleanup
 - Input handling (quit only)
 - Frame timing
+
+### `app/`
+
+**input.rs**
+
+- Keyboard event handling and parameter hotkeys
+- Dispatches mouse/focus events to `mouse.rs`
+
+**mouse.rs**
+
+- Mouse capture interaction (warp targets, click/drag/scroll)
+- Focus enter/return spring state machine (`MouseMotionState`)
+
+**mod.rs**
+
+- Frame loop: input → mouse spring tick → audio/config → render
 
 ### `shader/`
 

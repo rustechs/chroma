@@ -8,6 +8,7 @@ macro_rules! debug_logln {
 mod audio;
 mod config_watcher;
 mod input;
+mod mouse;
 mod rendering;
 mod status_bar;
 
@@ -84,6 +85,9 @@ fn prepare_reloaded_params(
 ) -> ShaderParams {
   new_params.time = current_params.time;
   new_params.audio_enabled = true;
+  new_params.mouse_x = current_params.mouse_x;
+  new_params.mouse_y = current_params.mouse_y;
+  new_params.mouse_influence = current_params.mouse_influence;
   new_params.set_resolution(
     current_params.resolution_width,
     current_params.resolution_height,
@@ -114,6 +118,7 @@ pub struct App {
   status_bar_audio_hold_remaining: f32,
   status_bar_audio_flow_elapsed: f32,
   status_bar_audio_production_elapsed: f32,
+  mouse_motion: mouse::MouseMotionState,
 }
 
 pub struct AppOptions {
@@ -221,6 +226,7 @@ impl App {
       status_bar_audio_hold_remaining: 0.0,
       status_bar_audio_flow_elapsed: 0.0,
       status_bar_audio_production_elapsed: 0.0,
+      mouse_motion: mouse::MouseMotionState::default(),
     })
   }
 
@@ -275,6 +281,7 @@ impl App {
       .as_secs_f32();
 
     self.params.update_time(delta_time);
+    self.mouse_motion.tick(&mut self.params, delta_time);
 
     let features = audio::update_audio_reactive(
       &mut self.params,
@@ -485,6 +492,8 @@ impl App {
           &mut self.converter,
           &mut self.running,
           &mut self.debug_log,
+          self.show_status_bar,
+          &mut self.mouse_motion,
         )?;
       }
 

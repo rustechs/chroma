@@ -7,31 +7,53 @@ use chroma::{
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use super::DebugLog;
+use super::{
+  mouse::{self, MouseMotionState},
+  DebugLog,
+};
 
 const EFFECT_TYPE_COUNT: u32 = 7;
 const FIRST_ACTIVE_EFFECT_TYPE: u32 = 2;
 const PARAMETER_STEP: f32 = 0.1;
 
-/// Handle keyboard input events
+/// Handle keyboard and mouse input events
 pub fn handle_input(
   params: &mut ShaderParams,
   converter: &mut AsciiConverter,
   running: &mut bool,
   debug_log: &mut DebugLog,
+  show_status_bar: bool,
+  mouse_motion: &mut MouseMotionState,
 ) -> Result<()> {
-  if !event::poll(Duration::from_millis(0))? {
-    return Ok(());
-  }
-
-  if let Event::Key(KeyEvent {
-    code,
-    modifiers,
-    kind: KeyEventKind::Press,
-    ..
-  }) = event::read()?
-  {
-    handle_key_press(code, modifiers, params, converter, running, debug_log)?;
+  // Drain the full event queue so mouse-move floods don't starve key presses.
+  while event::poll(Duration::from_millis(0))? {
+    match event::read()? {
+      Event::Key(KeyEvent {
+        code,
+        modifiers,
+        kind: KeyEventKind::Press,
+        ..
+      }) => {
+        handle_key_press(code, modifiers, params, converter, running, debug_log)?;
+      }
+      Event::Mouse(event) => {
+        mouse::handle_mouse_event(
+          event,
+          params,
+          converter,
+          show_status_bar,
+          debug_log,
+          mouse_motion,
+        )?;
+      }
+      Event::FocusLost => {
+        mouse_motion.begin_return(params);
+      }
+      Event::FocusGained => {
+        mouse_motion.mark_focus_gained();
+      }
+      _ => {}
+    }
   }
 
   Ok(())
@@ -45,7 +67,7 @@ fn adjust_if_manual(
   params.audio_enabled = true;
 }
 
-fn sync_palette(converter: &mut AsciiConverter, palette: chroma::params::PaletteType) {
+pub(crate) fn sync_palette(converter: &mut AsciiConverter, palette: chroma::params::PaletteType) {
   converter.set_palette(AsciiPalette::from(palette));
 }
 
@@ -56,7 +78,7 @@ fn next_effect_type(effect_type: u32) -> u32 {
   }
 }
 
-fn cycle_effect(params: &mut ShaderParams, debug_log: &mut DebugLog) -> Result<()> {
+pub(crate) fn cycle_effect(params: &mut ShaderParams, debug_log: &mut DebugLog) -> Result<()> {
   params.effect_type = next_effect_type(params.effect_type);
   params.effect_time = params.time;
 

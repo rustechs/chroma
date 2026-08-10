@@ -19,20 +19,20 @@ fn apply_beat_zoom(uv: vec2<f32>, time: f32) -> vec2<f32> {
     // Using sin wave for smooth in-out motion
     let zoom_curve = 1.0 - (sin(elapsed * 8.0) * envelope * strength * 0.15);
     
-    // Zoom from center with aspect ratio correction
-    let center = vec2<f32>(0.5, 0.5);
+    // Zoom from cursor/effect center with aspect ratio correction
+    let center = effect_center();
     let aspect_ratio = uniforms.resolution.x / uniforms.resolution.y;
     
     // Adjust UV coordinates to square space for proper circular zoom
     var adjusted_uv = uv;
-    adjusted_uv.x = (uv.x - 0.5) * aspect_ratio + 0.5;
+    adjusted_uv.x = (uv.x - center.x) * aspect_ratio + center.x;
     
     let offset = adjusted_uv - center;
     let zoomed = center + offset * zoom_curve;
     
     // Convert back to original aspect ratio
     var result = zoomed;
-    result.x = (zoomed.x - 0.5) / aspect_ratio + 0.5;
+    result.x = (zoomed.x - center.x) / aspect_ratio + center.x;
     
     return result;
 }
@@ -52,7 +52,7 @@ fn apply_beat_distortion(uv: vec2<f32>, time: f32) -> vec2<f32> {
     // Fast attack, slow decay envelope
     let envelope = exp(-elapsed * 3.0); // Exponential decay
     
-    let center = vec2<f32>(0.5, 0.5);
+    let center = effect_center();
     
     // Ripple wave expanding from center (like dropping stone in water)
     let dist_from_center = distance(uv, center);
@@ -109,8 +109,8 @@ fn apply_beat_flash(color: vec3<f32>, position: vec2<f32>, time: f32) -> vec3<f3
     // Quick flash that fades fast
     let flash_envelope = exp(-elapsed * 8.0);
     
-    // Radial gradient from center for more impact at center
-    let center = vec2<f32>(0.5, 0.5);
+    // Radial gradient from cursor for more impact near the pointer
+    let center = effect_center();
     let dist_from_center = distance(position, center);
     let radial_falloff = 1.0 - smoothstep(0.0, 0.7, dist_from_center);
     
@@ -128,4 +128,3 @@ fn apply_beat_flash(color: vec3<f32>, position: vec2<f32>, time: f32) -> vec3<f3
     
     return boosted_color;
 }
-
