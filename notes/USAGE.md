@@ -64,6 +64,19 @@ Controls downward pattern scroll. Default is off (`0.0`).
 - Keys: `g` / `G`
 - Mouse movement and click fight the fall but cannot cancel it (capped below full gravity). Interactive sessions enable mouse capture so live gravity adjustments can receive pointer input.
 
+### Mouse
+
+Mouse capture is enabled in interactive mode (not `--stream`).
+
+- **Move** — patterns warp toward the cursor; beat/vignette centers follow the pointer
+- **Left click** — randomize parameters (same as `R`)
+- **Right click** — cycle visual effect (same as `N`)
+- **Left drag** — horizontal adjusts hue, vertical adjusts scale
+- **Scroll** — adjust scale
+- **Focus lost/gained** — attractor soft-springs to center and back on re-entry
+
+See [CONTROLS.md](./CONTROLS.md) for the full mouse and keyboard reference.
+
 ## ASCII Palettes
 
 The application supports multiple ASCII palettes:

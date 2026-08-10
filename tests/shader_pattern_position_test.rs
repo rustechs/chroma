@@ -54,9 +54,9 @@ fn test_shader_centering_uses_current_globe_pattern_ids() {
   assert!(shader_main.contains(
     "pattern_type == 16u || pattern_type == 22u || pattern_type == 24u || pattern_type == 25u"
   ));
-  assert!(
-    shader_main.contains("return (position - vec2<f32>(0.5, 0.5)) * scale + vec2<f32>(0.5, 0.5);")
-  );
+  assert!(shader_main.contains("let center = effect_center();"));
+  assert!(shader_main.contains("return (position - center) * scale + center;"));
+  assert!(shader_main.contains("fn apply_mouse_warp"));
 }
 
 #[test]

@@ -254,3 +254,107 @@ fn test_save_to_file_in_reuses_hash_based_path() {
   assert_eq!(first_path.parent(), Some(dir.as_path()));
   assert!(first_path.file_name().is_some());
 }
+
+#[test]
+fn test_set_mouse_from_terminal_maps_cell_to_uv() {
+  let mut params = ShaderParams::default();
+  params.set_mouse_from_terminal(40, 6, 80, 25, true);
+  assert!((params.mouse_x - 0.5).abs() < f32::EPSILON);
+  assert!((params.mouse_y - 0.25).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_clear_mouse_interaction_restores_defaults() {
+  let mut params = ShaderParams {
+    mouse_x: 0.2,
+    mouse_y: 0.8,
+    mouse_influence: 1.5,
+    ..Default::default()
+  };
+
+  params.clear_mouse_interaction();
+
+  assert!((params.mouse_x - 0.5).abs() < f32::EPSILON);
+  assert!((params.mouse_y - 0.5).abs() < f32::EPSILON);
+  assert_eq!(params.mouse_influence, 0.0);
+}
+
+#[test]
+fn test_mouse_return_springs_toward_neutral() {
+  let mut params = ShaderParams {
+    mouse_x: 0.1,
+    mouse_y: 0.9,
+    mouse_influence: 1.5,
+    ..Default::default()
+  };
+  let mut vel_x = 0.0;
+  let mut vel_y = 0.0;
+
+  for _ in 0..90 {
+    let still = params.tick_mouse_spring(1.0 / 60.0, 0.5, 0.5, 0.0, &mut vel_x, &mut vel_y);
+    if !still {
+      break;
+    }
+  }
+
+  assert!((params.mouse_x - 0.5).abs() < 0.01);
+  assert!((params.mouse_y - 0.5).abs() < 0.01);
+  assert!(params.mouse_influence < 0.01);
+}
+
+#[test]
+fn test_mouse_enter_springs_toward_cursor() {
+  let mut params = ShaderParams::default();
+  let mut vel_x = 0.0;
+  let mut vel_y = 0.0;
+
+  for _ in 0..90 {
+    let still = params.tick_mouse_spring(1.0 / 60.0, 0.8, 0.2, 1.0, &mut vel_x, &mut vel_y);
+    if !still {
+      break;
+    }
+  }
+
+  assert!((params.mouse_x - 0.8).abs() < 0.01);
+  assert!((params.mouse_y - 0.2).abs() < 0.01);
+  assert!((params.mouse_influence - 1.0).abs() < 0.02);
+}
+
+#[test]
+fn test_should_begin_mouse_return_when_active() {
+  let active = ShaderParams {
+    mouse_x: 0.2,
+    mouse_y: 0.8,
+    mouse_influence: 1.0,
+    ..Default::default()
+  };
+  let idle = ShaderParams::default();
+
+  assert!(active.should_begin_mouse_return());
+  assert!(!idle.should_begin_mouse_return());
+}
+
+#[test]
+fn test_save_to_file_omits_runtime_mouse_fields() {
+  let params = ShaderParams {
+    mouse_x: 0.2,
+    mouse_y: 0.8,
+    mouse_influence: 1.5,
+    frequency: 12.0,
+    ..Default::default()
+  };
+
+  let dir = support::fresh_test_dir("shader_params_test_omits_mouse");
+  let path = params.save_to_file_in(&dir).expect("Failed to save");
+  let contents = std::fs::read_to_string(&path).expect("Failed to read");
+
+  assert!(!contents.contains("mouse_x"));
+  assert!(!contents.contains("mouse_y"));
+  assert!(!contents.contains("mouse_influence"));
+
+  let loaded = ShaderParams::load_from_file(&path).expect("Failed to load");
+  assert!((loaded.mouse_x - 0.5).abs() < f32::EPSILON);
+  assert!((loaded.mouse_y - 0.5).abs() < f32::EPSILON);
+  assert_eq!(loaded.mouse_influence, 0.0);
+  assert_eq!(loaded.frequency, 12.0);
+}

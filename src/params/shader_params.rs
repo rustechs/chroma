@@ -10,6 +10,10 @@ use sha2::{Digest, Sha256};
 
 use super::{randomizer, ColorMode, PaletteType, PatternType};
 
+fn default_mouse_center() -> f32 {
+  0.5
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShaderParams {
   pub time: f32,
@@ -67,6 +71,16 @@ pub struct ShaderParams {
   pub gravity: f32,
   /// How strongly the mouse may fight gravity (never enough to cancel it). Range: 0.0-1.0
   pub mouse_fight: f32,
+
+  /// Normalized mouse X in shader UV space (0–1). Runtime-only; not saved to configs.
+  #[serde(skip_serializing, default = "default_mouse_center")]
+  pub mouse_x: f32,
+  /// Normalized mouse Y in shader UV space (0–1). Runtime-only; not saved to configs.
+  #[serde(skip_serializing, default = "default_mouse_center")]
+  pub mouse_y: f32,
+  /// How strongly visuals react to the cursor (0 = off, 1 = hover, >1 = pressed).
+  #[serde(skip_serializing, default)]
+  pub mouse_influence: f32,
 }
 
 impl Default for ShaderParams {
@@ -125,6 +139,10 @@ impl Default for ShaderParams {
 
       gravity: 0.0,
       mouse_fight: 0.7,
+
+      mouse_x: 0.5,
+      mouse_y: 0.5,
+      mouse_influence: 0.0,
     }
   }
 }
@@ -241,6 +259,111 @@ impl ShaderParams {
 
     self.gravity = self.gravity.clamp(0.0, 2.0);
     self.mouse_fight = self.mouse_fight.clamp(0.0, 1.0);
+
+    self.mouse_x = self.mouse_x.clamp(0.0, 1.0);
+    self.mouse_y = self.mouse_y.clamp(0.0, 1.0);
+    self.mouse_influence = self.mouse_influence.clamp(0.0, 2.0);
+  }
+
+  /// Update mouse UV from terminal cell coordinates.
+  pub fn set_mouse_from_terminal(
+    &mut self,
+    column: u16,
+    row: u16,
+    terminal_width: u16,
+    terminal_height: u16,
+    show_status_bar: bool,
+  ) {
+    let (mouse_x, mouse_y) = Self::mouse_uv_from_terminal(
+      column,
+      row,
+      terminal_width,
+      terminal_height,
+      show_status_bar,
+    );
+    self.mouse_x = mouse_x;
+    self.mouse_y = mouse_y;
+  }
+
+  /// Restore screen-center defaults so shaders behave as if the mouse is inactive.
+  pub fn clear_mouse_interaction(&mut self) {
+    self.mouse_x = 0.5;
+    self.mouse_y = 0.5;
+    self.mouse_influence = 0.0;
+  }
+
+  /// Soft spring step toward a mouse UV / influence target. Returns true while still animating.
+  pub fn tick_mouse_spring(
+    &mut self,
+    delta_time: f32,
+    target_x: f32,
+    target_y: f32,
+    target_influence: f32,
+    vel_x: &mut f32,
+    vel_y: &mut f32,
+  ) -> bool {
+    let dt = delta_time.clamp(0.0, 0.05);
+
+    // Faster underdamped spring: soft bounce, settles in ~0.25–0.35s.
+    const STIFFNESS: f32 = 48.0;
+    const DAMPING: f32 = 12.5;
+    const INFLUENCE_RATE: f32 = 10.0;
+
+    let accel_x = STIFFNESS * (target_x - self.mouse_x) - DAMPING * *vel_x;
+    let accel_y = STIFFNESS * (target_y - self.mouse_y) - DAMPING * *vel_y;
+    *vel_x += accel_x * dt;
+    *vel_y += accel_y * dt;
+    self.mouse_x += *vel_x * dt;
+    self.mouse_y += *vel_y * dt;
+
+    let influence_t = 1.0 - (-INFLUENCE_RATE * dt).exp();
+    self.mouse_influence += (target_influence - self.mouse_influence) * influence_t;
+
+    let settled = (self.mouse_x - target_x).abs() < 0.003
+      && (self.mouse_y - target_y).abs() < 0.003
+      && (self.mouse_influence - target_influence).abs() < 0.02
+      && vel_x.abs() < 0.04
+      && vel_y.abs() < 0.04;
+
+    if settled {
+      self.mouse_x = target_x.clamp(0.0, 1.0);
+      self.mouse_y = target_y.clamp(0.0, 1.0);
+      self.mouse_influence = target_influence.clamp(0.0, 2.0);
+      *vel_x = 0.0;
+      *vel_y = 0.0;
+      false
+    } else {
+      self.mouse_x = self.mouse_x.clamp(0.0, 1.0);
+      self.mouse_y = self.mouse_y.clamp(0.0, 1.0);
+      self.mouse_influence = self.mouse_influence.clamp(0.0, 2.0);
+      true
+    }
+  }
+
+  pub fn should_begin_mouse_return(&self) -> bool {
+    self.mouse_influence > 0.01
+      || (self.mouse_x - 0.5).abs() >= 0.001
+      || (self.mouse_y - 0.5).abs() >= 0.001
+  }
+
+  /// Map terminal cell coordinates to normalized mouse UV without mutating state.
+  pub fn mouse_uv_from_terminal(
+    column: u16,
+    row: u16,
+    terminal_width: u16,
+    terminal_height: u16,
+    show_status_bar: bool,
+  ) -> (f32, f32) {
+    let shader_height = if show_status_bar {
+      terminal_height.saturating_sub(1).max(1)
+    } else {
+      terminal_height.max(1)
+    };
+    let shader_width = terminal_width.max(1);
+
+    let mouse_x = (column as f32 / shader_width as f32).clamp(0.0, 1.0);
+    let mouse_y = (row as f32 / shader_height as f32).min(1.0).clamp(0.0, 1.0);
+    (mouse_x, mouse_y)
   }
 
   pub fn adjust_frequency(&mut self, delta: f32) {

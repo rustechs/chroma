@@ -160,6 +160,28 @@ This document describes all available shader parameters, their ranges, and defau
 - **Default**: 0.2
 - **Description**: How much treble frequencies affect frequency.
 
+## Mouse Parameters (runtime-only)
+
+These are not written to saved config files. Defaults restore idle/centered visuals.
+
+### mouse_x
+
+- **Range**: 0.0 → 1.0
+- **Default**: 0.5
+- **Description**: Normalized cursor X in shader UV space. Soft-springs on focus enter/return.
+
+### mouse_y
+
+- **Range**: 0.0 → 1.0
+- **Default**: 0.5
+- **Description**: Normalized cursor Y in shader UV space. Soft-springs on focus enter/return.
+
+### mouse_influence
+
+- **Range**: 0.0 → 2.0
+- **Default**: 0.0
+- **Description**: How strongly visuals react to the cursor (`0` = off, `1` = hover, `>1` = pressed). Gates attractor warp/glow; beat/vignette centers follow `mouse_x`/`mouse_y`.
+
 ## Usage Examples
 
 ### High Contrast Psychedelic

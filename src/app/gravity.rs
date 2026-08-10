@@ -1,12 +1,12 @@
-//! Downward gravity for the shader UV plane, with mouse input that can fight
-//! the fall but never cancel it completely.
-
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+//! Downward gravity for the shader UV plane. Mouse fight strength is read from
+//! `ShaderParams` (`mouse_x`/`mouse_y`/`mouse_influence`) — no parallel tracker.
 
 /// Max fraction of gravity acceleration the mouse may cancel (must stay < 1).
 const MOUSE_FIGHT_CAP: f32 = 0.75;
-/// Fight strength when the cursor is active but the button is not held.
+/// Fight strength when the cursor is active but not held.
 const HOVER_FIGHT_FACTOR: f32 = 0.65;
+/// `mouse_influence` above hover level counts as pressed (see `mouse.rs`).
+const MOUSE_PRESS_INFLUENCE_THRESHOLD: f32 = 1.01;
 /// UV units / s² per unit of the `gravity` parameter.
 const GRAVITY_ACCEL_SCALE: f32 = 0.45;
 /// Horizontal pull toward the mouse cursor (scaled by gravity).
@@ -15,17 +15,11 @@ const HORIZONTAL_PULL: f32 = 0.55;
 const DAMPING: f32 = 2.4;
 /// Soft speed clamp in UV units / s.
 const MAX_SPEED: f32 = 1.25;
-/// How long after last mouse event the cursor still counts as active.
-const MOUSE_ACTIVE_SECONDS: f32 = 1.25;
 
 #[derive(Debug, Clone)]
 pub struct GravityState {
   pub offset: [f32; 2],
   pub velocity: [f32; 2],
-  pub mouse: [f32; 2],
-  pub mouse_active: bool,
-  pub mouse_pressed: bool,
-  mouse_active_remaining: f32,
 }
 
 impl Default for GravityState {
@@ -33,56 +27,27 @@ impl Default for GravityState {
     Self {
       offset: [0.0, 0.0],
       velocity: [0.0, 0.0],
-      mouse: [0.5, 0.5],
-      mouse_active: false,
-      mouse_pressed: false,
-      mouse_active_remaining: 0.0,
     }
   }
 }
 
 impl GravityState {
-  pub fn set_mouse_position(&mut self, x: f32, y: f32) {
-    self.mouse = [x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)];
-    self.mouse_active = true;
-    self.mouse_active_remaining = MOUSE_ACTIVE_SECONDS;
-  }
-
-  pub fn set_mouse_pressed(&mut self, pressed: bool) {
-    self.mouse_pressed = pressed;
-    if pressed {
-      self.mouse_active = true;
-      self.mouse_active_remaining = MOUSE_ACTIVE_SECONDS;
-    }
-  }
-
-  /// Effective mouse influence sent to the shader (0 = idle or gravity off).
-  pub fn shader_mouse_influence(&self, gravity: f32, mouse_fight: f32) -> f32 {
-    if !self.mouse_active || gravity <= 0.0001 {
-      return 0.0;
-    }
-
-    let base = mouse_fight.clamp(0.0, 1.0) * MOUSE_FIGHT_CAP;
-    if self.mouse_pressed {
-      base
-    } else {
-      base * HOVER_FIGHT_FACTOR
-    }
-  }
-
   /// Integrate gravity and mouse forces for one frame.
   ///
   /// Mouse vertical lift is hard-capped so net downward acceleration never
   /// drops below `gravity_accel * (1 - MOUSE_FIGHT_CAP)`.
-  pub fn update(&mut self, gravity: f32, mouse_fight: f32, delta_time: f32) {
+  pub fn update(
+    &mut self,
+    gravity: f32,
+    mouse_fight: f32,
+    mouse_x: f32,
+    _mouse_y: f32,
+    mouse_influence: f32,
+    delta_time: f32,
+  ) {
     let dt = delta_time.clamp(0.0, 0.1);
-
-    if self.mouse_active_remaining > 0.0 {
-      self.mouse_active_remaining = (self.mouse_active_remaining - dt).max(0.0);
-      if self.mouse_active_remaining <= 0.0 && !self.mouse_pressed {
-        self.mouse_active = false;
-      }
-    }
+    let mouse_active = mouse_influence > 0.001;
+    let mouse_pressed = mouse_influence > MOUSE_PRESS_INFLUENCE_THRESHOLD;
 
     let gravity = gravity.max(0.0);
     if gravity <= 0.0001 {
@@ -95,16 +60,16 @@ impl GravityState {
     }
 
     let mut accel_x = 0.0;
-    let accel_y = net_vertical_accel(gravity, mouse_fight, self.mouse_active, self.mouse_pressed);
+    let accel_y = net_vertical_accel(gravity, mouse_fight, mouse_active, mouse_pressed);
 
-    if self.mouse_active {
-      let press_boost = if self.mouse_pressed {
+    if mouse_active {
+      let press_boost = if mouse_pressed {
         1.0
       } else {
         HOVER_FIGHT_FACTOR
       };
       // Horizontal tug toward the cursor; strength scales with gravity.
-      accel_x += (self.mouse[0] - 0.5) * HORIZONTAL_PULL * gravity * press_boost;
+      accel_x += (mouse_x - 0.5) * HORIZONTAL_PULL * gravity * press_boost;
     }
 
     self.velocity[0] += accel_x * dt;
@@ -123,33 +88,6 @@ impl GravityState {
 
     self.offset[0] += self.velocity[0] * dt;
     self.offset[1] += self.velocity[1] * dt;
-  }
-}
-
-/// Apply a terminal mouse event to gravity interaction state.
-pub fn handle_mouse_event(
-  mouse: MouseEvent,
-  gravity: &mut GravityState,
-  terminal_size: (u16, u16),
-) {
-  let width = terminal_size.0.max(1) as f32;
-  let height = terminal_size.1.max(1) as f32;
-  let x = mouse.column as f32 / width;
-  let y = mouse.row as f32 / height;
-
-  match mouse.kind {
-    MouseEventKind::Down(MouseButton::Left) => {
-      gravity.set_mouse_position(x, y);
-      gravity.set_mouse_pressed(true);
-    }
-    MouseEventKind::Up(MouseButton::Left) => {
-      gravity.set_mouse_position(x, y);
-      gravity.set_mouse_pressed(false);
-    }
-    MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved => {
-      gravity.set_mouse_position(x, y);
-    }
-    _ => {}
   }
 }
 
@@ -210,24 +148,24 @@ mod tests {
   fn update_increases_downward_offset_over_time() {
     let mut state = GravityState::default();
     for _ in 0..30 {
-      state.update(1.0, 0.7, 1.0 / 60.0);
+      state.update(1.0, 0.7, 0.5, 0.5, 0.0, 1.0 / 60.0);
     }
     assert!(state.offset[1] > 0.0);
     assert!(state.velocity[1] > 0.0);
   }
 
   #[test]
-  fn gravity_zero_ignores_mouse_for_shader_influence_and_fall() {
-    let mut state = GravityState::default();
-    state.set_mouse_position(0.2, 0.2);
-    state.set_mouse_pressed(true);
+  fn gravity_zero_eases_residual_motion() {
+    let mut state = GravityState {
+      velocity: [0.1, 0.2],
+      ..Default::default()
+    };
 
-    for _ in 0..30 {
-      state.update(0.0, 1.0, 1.0 / 60.0);
+    for _ in 0..90 {
+      state.update(0.0, 1.0, 0.2, 0.2, 1.75, 1.0 / 60.0);
     }
 
-    assert_eq!(state.shader_mouse_influence(0.0, 1.0), 0.0);
-    assert!(state.offset[1].abs() < 0.02);
+    assert!(state.offset[1].abs() < 0.2);
     assert!(state.velocity[1].abs() < 0.05);
   }
 
@@ -235,12 +173,10 @@ mod tests {
   fn pressed_mouse_slows_but_does_not_reverse_fall() {
     let mut falling = GravityState::default();
     let mut fighting = GravityState::default();
-    fighting.set_mouse_position(0.5, 0.2);
-    fighting.set_mouse_pressed(true);
 
     for _ in 0..45 {
-      falling.update(1.0, 1.0, 1.0 / 60.0);
-      fighting.update(1.0, 1.0, 1.0 / 60.0);
+      falling.update(1.0, 1.0, 0.5, 0.5, 0.0, 1.0 / 60.0);
+      fighting.update(1.0, 1.0, 0.5, 0.2, 1.75, 1.0 / 60.0);
     }
 
     assert!(fighting.offset[1] > 0.0);
@@ -249,21 +185,11 @@ mod tests {
   }
 
   #[test]
-  fn mouse_move_updates_normalized_position() {
-    let mut gravity = GravityState::default();
-    handle_mouse_event(
-      MouseEvent {
-        kind: MouseEventKind::Moved,
-        column: 40,
-        row: 12,
-        modifiers: crossterm::event::KeyModifiers::NONE,
-      },
-      &mut gravity,
-      (80, 24),
-    );
+  fn mouse_influence_drives_fight_from_shader_params() {
+    let hover = net_vertical_accel(1.0, 1.0, true, false);
+    let pressed = net_vertical_accel(1.0, 1.0, true, true);
 
-    assert!(gravity.mouse_active);
-    assert!((gravity.mouse[0] - 0.5).abs() < 1e-5);
-    assert!((gravity.mouse[1] - 0.5).abs() < 1e-5);
+    assert!(pressed < hover);
+    assert!(pressed > 0.0);
   }
 }

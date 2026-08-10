@@ -8,7 +8,7 @@ use chroma::{
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::{
-  gravity::{self, GravityState},
+  mouse::{self, MouseMotionState},
   DebugLog,
 };
 
@@ -20,11 +20,12 @@ const PARAMETER_STEP: f32 = 0.1;
 pub fn handle_input(
   params: &mut ShaderParams,
   converter: &mut AsciiConverter,
-  gravity: &mut GravityState,
-  terminal_size: (u16, u16),
   running: &mut bool,
   debug_log: &mut DebugLog,
+  show_status_bar: bool,
+  mouse_motion: &mut MouseMotionState,
 ) -> Result<()> {
+  // Drain the full event queue so mouse-move floods don't starve key presses.
   while event::poll(Duration::from_millis(0))? {
     match event::read()? {
       Event::Key(KeyEvent {
@@ -35,8 +36,21 @@ pub fn handle_input(
       }) => {
         handle_key_press(code, modifiers, params, converter, running, debug_log)?;
       }
-      Event::Mouse(mouse) => {
-        gravity::handle_mouse_event(mouse, gravity, terminal_size);
+      Event::Mouse(event) => {
+        mouse::handle_mouse_event(
+          event,
+          params,
+          converter,
+          show_status_bar,
+          debug_log,
+          mouse_motion,
+        )?;
+      }
+      Event::FocusLost => {
+        mouse_motion.begin_return(params);
+      }
+      Event::FocusGained => {
+        mouse_motion.mark_focus_gained();
       }
       _ => {}
     }
@@ -53,7 +67,7 @@ fn adjust_if_manual(
   params.audio_enabled = true;
 }
 
-fn sync_palette(converter: &mut AsciiConverter, palette: chroma::params::PaletteType) {
+pub(crate) fn sync_palette(converter: &mut AsciiConverter, palette: chroma::params::PaletteType) {
   converter.set_palette(AsciiPalette::from(palette));
 }
 
@@ -64,7 +78,7 @@ fn next_effect_type(effect_type: u32) -> u32 {
   }
 }
 
-fn cycle_effect(params: &mut ShaderParams, debug_log: &mut DebugLog) -> Result<()> {
+pub(crate) fn cycle_effect(params: &mut ShaderParams, debug_log: &mut DebugLog) -> Result<()> {
   params.effect_type = next_effect_type(params.effect_type);
   params.effect_time = params.time;
 

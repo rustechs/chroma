@@ -5,8 +5,6 @@ use crate::params::ShaderParams;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct InteractionUniforms {
   pub gravity_offset: [f32; 2],
-  pub mouse_position: [f32; 2],
-  pub mouse_influence: f32,
 }
 
 #[repr(C)]
@@ -49,8 +47,8 @@ pub struct ShaderUniforms {
   pub gravity: f32,
 
   pub gravity_offset: [f32; 2],
-  pub mouse_position: [f32; 2],
-
+  pub mouse_x: f32,
+  pub mouse_y: f32,
   pub mouse_influence: f32,
   // Align background_tint (vec3) to a 16-byte boundary.
   _padding2: u32,
@@ -108,9 +106,9 @@ impl ShaderUniforms {
       gravity: params.gravity,
 
       gravity_offset: interaction.gravity_offset,
-      mouse_position: interaction.mouse_position,
-
-      mouse_influence: interaction.mouse_influence,
+      mouse_x: params.mouse_x,
+      mouse_y: params.mouse_y,
+      mouse_influence: params.mouse_influence,
       _padding2: 0,
       background_tint: [
         params.background_tint_r,
@@ -173,6 +171,9 @@ mod tests {
       beat_zoom_strength: 0.55,
       gravity: 0.8,
       mouse_fight: 0.7,
+      mouse_x: 0.25,
+      mouse_y: 0.75,
+      mouse_influence: 1.5,
       background_tint_r: 0.1,
       background_tint_g: 0.2,
       background_tint_b: 0.3,
@@ -181,8 +182,6 @@ mod tests {
 
     let interaction = InteractionUniforms {
       gravity_offset: [0.15, 0.25],
-      mouse_position: [0.3, 0.4],
-      mouse_influence: 0.55,
     };
     let uniforms = ShaderUniforms::from_params_with_interaction(&params, interaction);
 
@@ -215,8 +214,9 @@ mod tests {
     assert_eq!(uniforms.beat_zoom_strength, 0.55);
     assert_eq!(uniforms.gravity, 0.8);
     assert_eq!(uniforms.gravity_offset, [0.15, 0.25]);
-    assert_eq!(uniforms.mouse_position, [0.3, 0.4]);
-    assert_eq!(uniforms.mouse_influence, 0.55);
+    assert_eq!(uniforms.mouse_x, 0.25);
+    assert_eq!(uniforms.mouse_y, 0.75);
+    assert_eq!(uniforms.mouse_influence, 1.5);
     assert_eq!(uniforms.background_tint, [0.1, 0.2, 0.3]);
   }
 
