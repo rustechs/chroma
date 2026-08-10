@@ -186,7 +186,7 @@ pub struct CliArgs {
   #[arg(short = 'v', long, value_name = "FLOAT")]
   pub vignette: Option<f32>,
 
-  /// Downward gravity for the pattern scroll. 0 = off. Mouse can fight it but not cancel it. Range: 0.0-2.0
+  /// Downward gravity for the pattern droop. 0 = off. Mouse can fight it but not cancel it. Range: 0.0-100.0
   #[arg(long, value_name = "FLOAT")]
   pub gravity: Option<f32>,
 

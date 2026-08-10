@@ -15,6 +15,7 @@ use super::{
 const EFFECT_TYPE_COUNT: u32 = 7;
 const FIRST_ACTIVE_EFFECT_TYPE: u32 = 2;
 const PARAMETER_STEP: f32 = 0.1;
+const GRAVITY_STEP: f32 = 1.0;
 
 /// Handle keyboard and mouse input events
 pub fn handle_input(
@@ -148,8 +149,8 @@ fn handle_key_press(
     KeyCode::Char(']') => params.adjust_scale(PARAMETER_STEP),
 
     // Gravity
-    KeyCode::Char('g') => params.adjust_gravity(PARAMETER_STEP),
-    KeyCode::Char('G') => params.adjust_gravity(-PARAMETER_STEP),
+    KeyCode::Char('g') => params.adjust_gravity(GRAVITY_STEP),
+    KeyCode::Char('G') => params.adjust_gravity(-GRAVITY_STEP),
 
     // Pattern selection
     KeyCode::Char('t') | KeyCode::Char('T') => {
@@ -642,7 +643,7 @@ mod tests {
       &mut running,
       &mut debug_log,
     );
-    assert!((params.gravity - 0.6).abs() < 1e-5);
+    assert!((params.gravity - 1.5).abs() < 1e-5);
 
     invoke_key(
       KeyCode::Char('G'),
