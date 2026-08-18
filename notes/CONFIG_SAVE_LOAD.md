@@ -68,6 +68,7 @@ mouse_spring_rate = 32.0
 mouse_damping = 5.5
 mouse_hover_influence = 1.0
 mouse_press_influence = 1.75
+mouse_hover_fight = 0.65
 # ... etc
 ```
 

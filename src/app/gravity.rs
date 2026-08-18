@@ -18,7 +18,6 @@ const MAX_DROOP: f32 = 1.35;
 const DROOP_TAU_SECONDS: f32 = 0.35;
 /// Seconds to smooth mouse fight (kills twitch from influence flicker).
 const FIGHT_TAU_SECONDS: f32 = 0.35;
-const HOVER_FIGHT_FACTOR: f32 = 0.65;
 
 #[derive(Debug, Clone)]
 pub struct GravityState {
@@ -50,6 +49,7 @@ impl GravityState {
       params.mouse_influence,
       params.mouse_hover_influence,
       params.mouse_press_influence,
+      params.mouse_hover_fight,
     );
     let fight_alpha = 1.0 - (-dt / FIGHT_TAU_SECONDS).exp();
     self.smoothed_fight += (raw_fight - self.smoothed_fight) * fight_alpha;
@@ -75,6 +75,7 @@ fn raw_mouse_fight(
   mouse_influence: f32,
   hover_influence: f32,
   press_influence: f32,
+  hover_fight: f32,
 ) -> f32 {
   if mouse_influence <= 0.001 {
     return 0.0;
@@ -83,7 +84,7 @@ fn raw_mouse_fight(
   let press_boost = if mouse_influence > hover_influence + 0.01 {
     1.0
   } else {
-    HOVER_FIGHT_FACTOR
+    hover_fight.clamp(0.0, 1.0)
   };
   let strength = mouse_fight.clamp(0.0, 1.0) * press_boost;
   let influence_t = (mouse_influence / press_influence.max(0.001)).clamp(0.0, 1.0);
@@ -105,6 +106,7 @@ fn target_droop(params: &ShaderParams) -> f32 {
         params.mouse_influence,
         params.mouse_hover_influence,
         params.mouse_press_influence,
+        params.mouse_hover_fight,
       )))
   .min(MAX_DROOP)
 }
@@ -227,6 +229,44 @@ mod tests {
     assert!(
       target_droop(&just_above_hover) < hover_droop,
       "crossing hover_influence should switch to press fight"
+    );
+  }
+
+  #[test]
+  fn configured_hover_fight_scales_hover_but_not_press() {
+    let hover_weak = ShaderParams {
+      gravity: 1.0,
+      mouse_fight: 1.0,
+      mouse_influence: 1.0,
+      mouse_hover_influence: 1.0,
+      mouse_press_influence: 1.75,
+      mouse_hover_fight: 0.2,
+      ..ShaderParams::default()
+    };
+    let hover_strong = ShaderParams {
+      mouse_hover_fight: 0.9,
+      ..hover_weak
+    };
+    let press_weak = ShaderParams {
+      mouse_influence: 1.75,
+      ..hover_weak
+    };
+    let press_strong = ShaderParams {
+      mouse_influence: 1.75,
+      ..hover_strong
+    };
+
+    let weak_hover_droop = target_droop(&hover_weak);
+    let strong_hover_droop = target_droop(&hover_strong);
+
+    assert!(
+      strong_hover_droop < weak_hover_droop,
+      "higher hover fight should cancel more droop: {strong_hover_droop} vs {weak_hover_droop}"
+    );
+    assert!(strong_hover_droop > 0.0);
+    assert!(
+      (target_droop(&press_weak) - target_droop(&press_strong)).abs() < 1e-6,
+      "hover fight must not change press fight"
     );
   }
 

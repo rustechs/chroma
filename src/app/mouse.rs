@@ -282,4 +282,60 @@ mod tests {
 
     assert!((motion.target_influence - 0.35).abs() < f32::EPSILON);
   }
+
+  #[test]
+  fn test_entering_picks_up_reloaded_hover_influence() {
+    let mut params = ShaderParams {
+      mouse_hover_influence: 0.55,
+      ..ShaderParams::default()
+    };
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Entering,
+      target_influence: 1.0,
+      pressed: false,
+      ..MouseMotionState::default()
+    };
+
+    motion.tick(&mut params, 1.0 / 60.0);
+
+    assert_eq!(motion.mode, MouseMode::Entering);
+    assert!((motion.target_influence - 0.55).abs() < f32::EPSILON);
+  }
+
+  #[test]
+  fn test_pressed_tracking_picks_up_reloaded_press_influence() {
+    let mut params = ShaderParams {
+      mouse_press_influence: 1.4,
+      ..ShaderParams::default()
+    };
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Tracking,
+      target_influence: 1.75,
+      pressed: true,
+      ..MouseMotionState::default()
+    };
+
+    motion.tick(&mut params, 1.0 / 60.0);
+
+    assert!((motion.target_influence - 1.4).abs() < f32::EPSILON);
+  }
+
+  #[test]
+  fn test_pressed_entering_picks_up_reloaded_press_influence() {
+    let mut params = ShaderParams {
+      mouse_press_influence: 1.15,
+      ..ShaderParams::default()
+    };
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Entering,
+      target_influence: 1.75,
+      pressed: true,
+      ..MouseMotionState::default()
+    };
+
+    motion.tick(&mut params, 1.0 / 60.0);
+
+    assert_eq!(motion.mode, MouseMode::Entering);
+    assert!((motion.target_influence - 1.15).abs() < f32::EPSILON);
+  }
 }
