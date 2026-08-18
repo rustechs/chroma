@@ -189,6 +189,48 @@ mod tests {
   }
 
   #[test]
+  fn configured_hover_and_press_scale_fight() {
+    let hover = ShaderParams {
+      gravity: 1.0,
+      mouse_fight: 1.0,
+      mouse_influence: 0.4,
+      mouse_hover_influence: 0.4,
+      mouse_press_influence: 0.9,
+      ..ShaderParams::default()
+    };
+    let press = ShaderParams {
+      mouse_influence: 0.9,
+      ..hover
+    };
+    // Same gravity, fight, hover, and live influence; only the press scale differs.
+    // A hardcoded `/ 1.75` would make these two droops equal and fail the assertion.
+    let press_with_default_scale = ShaderParams {
+      mouse_press_influence: 1.75,
+      ..press
+    };
+
+    let hover_droop = target_droop(&hover);
+    let press_droop = target_droop(&press);
+    let default_scale_droop = target_droop(&press_with_default_scale);
+
+    assert!(press_droop < hover_droop);
+    assert!(press_droop > 0.0);
+    assert!(
+      press_droop < default_scale_droop,
+      "press_influence=0.9 should treat live 0.9 as full press, not 0.9/1.75: {press_droop} vs {default_scale_droop}"
+    );
+
+    let just_above_hover = ShaderParams {
+      mouse_influence: 0.42,
+      ..hover
+    };
+    assert!(
+      target_droop(&just_above_hover) < hover_droop,
+      "crossing hover_influence should switch to press fight"
+    );
+  }
+
+  #[test]
   fn fight_smoothing_avoids_instant_jumps() {
     let mut state = GravityState::default();
     state.update(&gravity_params(1.0, 1.0, 0.0), 1.0 / 60.0);

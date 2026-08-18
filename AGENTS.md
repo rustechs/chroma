@@ -56,6 +56,8 @@ nix --extra-experimental-features 'nix-command flakes' develop -c cargo test --t
 
 Running `cargo test` outside the dev shell may fail to link Linux PulseAudio libraries even when the Rust code is correct.
 
+Do not `cargo install` from `nix develop`. That produces a `~/.cargo/bin/chroma` whose ELF interpreter is a Nix store path and will not run on the host. For a PATH/dashboard binary, run `./scripts/install-host.sh` with host cargo (see `notes/NIX.md`).
+
 ## Implementation Guidelines
 
 - Keep changes scoped to the behavior being fixed. Avoid unrelated refactors, formatting churn, or doc rewrites unless they directly support the change.
