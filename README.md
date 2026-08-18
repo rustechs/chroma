@@ -58,8 +58,8 @@ cd chroma
 
 # Host toolchain only. Do not run cargo install inside `nix develop`:
 # that links ~/.cargo/bin/chroma against Nix glibc and it will not start.
+# Canonical PATH install: parallel jobs plus ELF interpreter check.
 ./scripts/install-host.sh
-# equivalent: cargo install --path . --force
 ```
 
 ## ℹ️ Usage
