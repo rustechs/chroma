@@ -182,6 +182,18 @@ These are written to saved config files and picked up on live reload. They are n
 - **Default**: 5.5
 - **Description**: Velocity damping of the attractor. Higher values settle with less bounce.
 
+### mouse_hover_influence
+
+- **Range**: 0.0 → 2.0
+- **Default**: 1.0
+- **Description**: How strongly the attractor pulls (warp/glow) while the pointer is over the terminal without a button down.
+
+### mouse_press_influence
+
+- **Range**: 0.0 → 2.0
+- **Default**: 1.75
+- **Description**: How strongly the attractor pulls while a mouse button is held.
+
 ## Mouse Parameters (runtime-only)
 
 These are not written to saved config files. Defaults restore idle/centered visuals.
@@ -202,7 +214,7 @@ These are not written to saved config files. Defaults restore idle/centered visu
 
 - **Range**: 0.0 → 2.0
 - **Default**: 0.0
-- **Description**: How strongly visuals react to the cursor (`0` = off, `1` = hover, `>1` = pressed). Gates attractor warp/glow; beat/vignette centers follow `mouse_x`/`mouse_y`.
+- **Description**: Live attractor strength (`0` = off). Eases toward `mouse_hover_influence` or `mouse_press_influence`; not saved. Gates warp/glow; beat/vignette centers follow `mouse_x`/`mouse_y`.
 
 ## Usage Examples
 
