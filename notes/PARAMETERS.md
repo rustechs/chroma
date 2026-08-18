@@ -194,6 +194,12 @@ These are written to saved config files and picked up on live reload. They are n
 - **Default**: 1.75
 - **Description**: How strongly the attractor pulls while a mouse button is held.
 
+### mouse_hover_fight
+
+- **Range**: 0.0 → 1.0
+- **Default**: 0.65
+- **Description**: Fraction of `mouse_fight` applied to gravity droop while hovering. Press still uses full `mouse_fight`. Lower values leave more droop under the pointer; `1.0` matches press fight.
+
 ## Mouse Parameters (runtime-only)
 
 These are not written to saved config files. Defaults restore idle/centered visuals.

@@ -627,6 +627,9 @@ mod tests {
       resolution_width: 120,
       resolution_height: 40,
       palette: PaletteType::Braille,
+      mouse_influence: 1.15,
+      mouse_x: 0.22,
+      mouse_y: 0.81,
       ..ShaderParams::default()
     };
     let incoming = ShaderParams {
@@ -635,6 +638,9 @@ mod tests {
       resolution_height: 10,
       palette: PaletteType::Lines,
       frequency: 14.0,
+      mouse_influence: 0.0,
+      mouse_x: 0.5,
+      mouse_y: 0.5,
       ..ShaderParams::default()
     };
 
@@ -645,6 +651,9 @@ mod tests {
     assert_eq!(prepared.resolution_height, current.resolution_height);
     assert_eq!(prepared.palette, PaletteType::Lines);
     assert_eq!(prepared.frequency, 14.0);
+    assert_eq!(prepared.mouse_influence, current.mouse_influence);
+    assert_eq!(prepared.mouse_x, current.mouse_x);
+    assert_eq!(prepared.mouse_y, current.mouse_y);
   }
 
   #[test]
@@ -664,6 +673,7 @@ mod tests {
       mouse_damping: 9.5,
       mouse_hover_influence: 0.45,
       mouse_press_influence: 1.2,
+      mouse_hover_fight: 0.4,
       ..ShaderParams::default()
     };
 
@@ -680,5 +690,6 @@ mod tests {
     assert_eq!(prepared.mouse_damping, 9.5);
     assert_eq!(prepared.mouse_hover_influence, 0.45);
     assert_eq!(prepared.mouse_press_influence, 1.2);
+    assert_eq!(prepared.mouse_hover_fight, 0.4);
   }
 }

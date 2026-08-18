@@ -1,8 +1,9 @@
 mod support;
 
 use chroma::params::{
-  MouseInertia, ShaderParams, DEFAULT_MOUSE_DAMPING, DEFAULT_MOUSE_HOVER_INFLUENCE,
-  DEFAULT_MOUSE_INERTIA, DEFAULT_MOUSE_PRESS_INFLUENCE, DEFAULT_MOUSE_SPRING_RATE,
+  MouseInertia, ShaderParams, DEFAULT_MOUSE_DAMPING, DEFAULT_MOUSE_HOVER_FIGHT,
+  DEFAULT_MOUSE_HOVER_INFLUENCE, DEFAULT_MOUSE_INERTIA, DEFAULT_MOUSE_PRESS_INFLUENCE,
+  DEFAULT_MOUSE_SPRING_RATE,
 };
 
 #[test]
@@ -19,6 +20,7 @@ fn test_default_params() {
   assert_eq!(params.mouse_damping, DEFAULT_MOUSE_DAMPING);
   assert_eq!(params.mouse_hover_influence, DEFAULT_MOUSE_HOVER_INFLUENCE);
   assert_eq!(params.mouse_press_influence, DEFAULT_MOUSE_PRESS_INFLUENCE);
+  assert_eq!(params.mouse_hover_fight, DEFAULT_MOUSE_HOVER_FIGHT);
 }
 
 #[test]
@@ -395,6 +397,7 @@ fn test_save_to_file_omits_runtime_mouse_fields() {
   assert!(contents.contains("mouse_damping"));
   assert!(contents.contains("mouse_hover_influence"));
   assert!(contents.contains("mouse_press_influence"));
+  assert!(contents.contains("mouse_hover_fight"));
 
   let loaded = ShaderParams::load_from_file(&path).expect("Failed to load");
   assert!((loaded.mouse_x - 0.5).abs() < f32::EPSILON);
@@ -414,6 +417,7 @@ mouse_spring_rate = 18.0
 mouse_damping = 4.0
 mouse_hover_influence = 0.6
 mouse_press_influence = 1.2
+mouse_hover_fight = 0.4
 "#,
   )
   .expect("load");
@@ -423,6 +427,7 @@ mouse_press_influence = 1.2
   assert!((loaded.mouse_damping - 4.0).abs() < f32::EPSILON);
   assert!((loaded.mouse_hover_influence - 0.6).abs() < f32::EPSILON);
   assert!((loaded.mouse_press_influence - 1.2).abs() < f32::EPSILON);
+  assert!((loaded.mouse_hover_fight - 0.4).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -433,6 +438,7 @@ fn test_missing_mouse_dynamics_keep_defaults() {
   assert!((loaded.mouse_damping - DEFAULT_MOUSE_DAMPING).abs() < f32::EPSILON);
   assert!((loaded.mouse_hover_influence - DEFAULT_MOUSE_HOVER_INFLUENCE).abs() < f32::EPSILON);
   assert!((loaded.mouse_press_influence - DEFAULT_MOUSE_PRESS_INFLUENCE).abs() < f32::EPSILON);
+  assert!((loaded.mouse_hover_fight - DEFAULT_MOUSE_HOVER_FIGHT).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -443,6 +449,7 @@ fn test_clamp_mouse_dynamics() {
     mouse_damping: 99.0,
     mouse_hover_influence: -1.0,
     mouse_press_influence: 9.0,
+    mouse_hover_fight: 2.5,
     ..Default::default()
   };
   params.clamp_all();
@@ -451,6 +458,7 @@ fn test_clamp_mouse_dynamics() {
   assert_eq!(params.mouse_damping, 40.0);
   assert_eq!(params.mouse_hover_influence, 0.0);
   assert_eq!(params.mouse_press_influence, 2.0);
+  assert_eq!(params.mouse_hover_fight, 1.0);
 }
 
 #[test]
