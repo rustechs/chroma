@@ -63,6 +63,9 @@ audio_enabled = true
 bass_influence = 0.5
 mid_influence = 0.3
 treble_influence = 0.2
+mouse_inertia = 1.35
+mouse_spring_rate = 32.0
+mouse_damping = 5.5
 # ... etc
 ```
 

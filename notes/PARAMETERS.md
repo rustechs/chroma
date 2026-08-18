@@ -160,6 +160,28 @@ This document describes all available shader parameters, their ranges, and defau
 - **Default**: 0.2
 - **Description**: How much treble frequencies affect frequency.
 
+## Mouse attractor dynamics (config)
+
+These are written to saved config files and picked up on live reload. They are not CLI flags or hotkeys.
+
+### mouse_inertia
+
+- **Range**: 0.2 → 8.0
+- **Default**: 1.35
+- **Description**: Inertial mass of the cursor attractor. Higher values lag and overshoot more. Distinct from the shader's gravitational warp pull.
+
+### mouse_spring_rate
+
+- **Range**: 1.0 → 120.0
+- **Default**: 32.0
+- **Description**: Spring stiffness toward the pointer (or screen center on focus return). Higher values snap harder.
+
+### mouse_damping
+
+- **Range**: 0.0 → 40.0
+- **Default**: 5.5
+- **Description**: Velocity damping of the attractor. Higher values settle with less bounce.
+
 ## Mouse Parameters (runtime-only)
 
 These are not written to saved config files. Defaults restore idle/centered visuals.
@@ -168,13 +190,13 @@ These are not written to saved config files. Defaults restore idle/centered visu
 
 - **Range**: 0.0 → 1.0
 - **Default**: 0.5
-- **Description**: Normalized cursor X in shader UV space. Soft-springs on focus enter/return.
+- **Description**: Normalized cursor X in shader UV space. Trails the pointer with inertial mass.
 
 ### mouse_y
 
 - **Range**: 0.0 → 1.0
 - **Default**: 0.5
-- **Description**: Normalized cursor Y in shader UV space. Soft-springs on focus enter/return.
+- **Description**: Normalized cursor Y in shader UV space. Trails the pointer with inertial mass.
 
 ### mouse_influence
 

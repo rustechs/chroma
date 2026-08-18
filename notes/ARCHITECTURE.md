@@ -88,7 +88,7 @@ This project avoids unnecessary complexity:
 ```
 1. Poll keyboard / mouse / focus events (interactive mode)
    ↓
-2. Tick mouse enter/return spring toward target UV + influence
+2. Tick mouse inertial mass toward target UV + influence
    ↓
 3. Check for config file changes / apply reload
    ↓
@@ -154,11 +154,11 @@ Next frame uses new parameters
 **mouse.rs**
 
 - Mouse capture interaction (warp targets, click/drag/scroll)
-- Focus enter/return spring state machine (`MouseMotionState`)
+- Focus enter/return/tracking inertial state machine (`MouseMotionState`)
 
 **mod.rs**
 
-- Frame loop: input → mouse spring tick → audio/config → render
+- Frame loop: input → mouse inertia tick → audio/config → render
 
 ### `shader/`
 

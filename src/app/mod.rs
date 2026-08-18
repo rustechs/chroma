@@ -666,6 +666,9 @@ mod tests {
       terminal_bg_r: 0.5,
       audio_enabled: false,
       beat_sensitivity: 2.5,
+      mouse_inertia: 2.8,
+      mouse_spring_rate: 20.0,
+      mouse_damping: 9.5,
       ..ShaderParams::default()
     };
 
@@ -677,5 +680,8 @@ mod tests {
     assert_eq!(prepared.terminal_bg_r, 0.5);
     assert!(prepared.audio_enabled);
     assert_eq!(prepared.beat_sensitivity, 2.5);
+    assert_eq!(prepared.mouse_inertia, 2.8);
+    assert_eq!(prepared.mouse_spring_rate, 20.0);
+    assert_eq!(prepared.mouse_damping, 9.5);
   }
 }

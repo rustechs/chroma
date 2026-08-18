@@ -112,9 +112,10 @@ Mouse capture is enabled in interactive mode (not `--stream`).
 
 ### Leave / gain focus
 
-- Focus lost: attractor softly springs back to screen center while influence fades (~0.3s)
-- Focus gained: after the next mouse move, attractor springs from center toward the cursor while influence eases in
-- Fresh mouse input during a return cancels it and starts the enter transition
+- Focus lost: attractor keeps its velocity and coasts back to screen center while influence fades
+- Focus gained: after the next mouse move, attractor accelerates from rest/current velocity toward the cursor
+- While the pointer is over the terminal, the warp well tracks the cursor with inertial mass (lag and light overshoot) instead of snapping
+- Fresh mouse input during a return keeps momentum and retargets the cursor
 
 ## Status Bar
 

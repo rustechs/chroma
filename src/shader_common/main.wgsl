@@ -65,7 +65,8 @@ fn pattern_position_for_scale(position: vec2<f32>, scale: f32, pattern_type: u32
     return position * scale;
 }
 
-/// Pull UVs toward the mouse so patterns warp under the cursor.
+/// Gravitational pull of UVs toward the mouse well. Inertial lag of the well
+/// itself is integrated on the CPU (`mouse_x` / `mouse_y` already trail the cursor).
 fn apply_mouse_warp(uv: vec2<f32>) -> vec2<f32> {
     let influence = uniforms.mouse_influence;
     if influence < 0.01 {
