@@ -286,14 +286,7 @@ impl App {
     self.params.update_time(delta_time);
     self.mouse_motion.tick(&mut self.params, delta_time);
 
-    self.gravity.update(
-      self.params.gravity,
-      self.params.mouse_fight,
-      self.params.mouse_x,
-      self.params.mouse_y,
-      self.params.mouse_influence,
-      delta_time,
-    );
+    self.gravity.update(&self.params, delta_time);
 
     let features = audio::update_audio_reactive(
       &mut self.params,
@@ -669,6 +662,8 @@ mod tests {
       mouse_inertia: 2.8,
       mouse_spring_rate: 20.0,
       mouse_damping: 9.5,
+      mouse_hover_influence: 0.45,
+      mouse_press_influence: 1.2,
       ..ShaderParams::default()
     };
 
@@ -683,5 +678,7 @@ mod tests {
     assert_eq!(prepared.mouse_inertia, 2.8);
     assert_eq!(prepared.mouse_spring_rate, 20.0);
     assert_eq!(prepared.mouse_damping, 9.5);
+    assert_eq!(prepared.mouse_hover_influence, 0.45);
+    assert_eq!(prepared.mouse_press_influence, 1.2);
   }
 }

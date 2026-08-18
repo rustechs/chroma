@@ -17,6 +17,8 @@ fn default_mouse_center() -> f32 {
 pub const DEFAULT_MOUSE_INERTIA: f32 = 1.35;
 pub const DEFAULT_MOUSE_SPRING_RATE: f32 = 32.0;
 pub const DEFAULT_MOUSE_DAMPING: f32 = 5.5;
+pub const DEFAULT_MOUSE_HOVER_INFLUENCE: f32 = 1.0;
+pub const DEFAULT_MOUSE_PRESS_INFLUENCE: f32 = 1.75;
 
 fn default_mouse_inertia() -> f32 {
   DEFAULT_MOUSE_INERTIA
@@ -28,6 +30,14 @@ fn default_mouse_spring_rate() -> f32 {
 
 fn default_mouse_damping() -> f32 {
   DEFAULT_MOUSE_DAMPING
+}
+
+fn default_mouse_hover_influence() -> f32 {
+  DEFAULT_MOUSE_HOVER_INFLUENCE
+}
+
+fn default_mouse_press_influence() -> f32 {
+  DEFAULT_MOUSE_PRESS_INFLUENCE
 }
 
 /// Velocity state for the mouse attractor's inertial mass.
@@ -134,6 +144,12 @@ pub struct ShaderParams {
   /// Velocity damping of the mouse attractor. Higher values settle with less bounce.
   #[serde(default = "default_mouse_damping")]
   pub mouse_damping: f32,
+  /// Attractor strength while hovering. Also scales warp/glow.
+  #[serde(default = "default_mouse_hover_influence")]
+  pub mouse_hover_influence: f32,
+  /// Attractor strength while a mouse button is down.
+  #[serde(default = "default_mouse_press_influence")]
+  pub mouse_press_influence: f32,
 
   /// Normalized mouse X in shader UV space (0–1). Runtime-only; not saved to configs.
   #[serde(skip_serializing, default = "default_mouse_center")]
@@ -141,7 +157,7 @@ pub struct ShaderParams {
   /// Normalized mouse Y in shader UV space (0–1). Runtime-only; not saved to configs.
   #[serde(skip_serializing, default = "default_mouse_center")]
   pub mouse_y: f32,
-  /// How strongly visuals react to the cursor (0 = off, 1 = hover, >1 = pressed).
+  /// Live attractor strength (0 = off). Runtime-only; eases toward hover/press config.
   #[serde(skip_serializing, default)]
   pub mouse_influence: f32,
 }
@@ -205,6 +221,8 @@ impl Default for ShaderParams {
       mouse_inertia: DEFAULT_MOUSE_INERTIA,
       mouse_spring_rate: DEFAULT_MOUSE_SPRING_RATE,
       mouse_damping: DEFAULT_MOUSE_DAMPING,
+      mouse_hover_influence: DEFAULT_MOUSE_HOVER_INFLUENCE,
+      mouse_press_influence: DEFAULT_MOUSE_PRESS_INFLUENCE,
 
       mouse_x: 0.5,
       mouse_y: 0.5,
@@ -332,6 +350,8 @@ impl ShaderParams {
     self.mouse_inertia = self.mouse_inertia.clamp(0.2, 8.0);
     self.mouse_spring_rate = self.mouse_spring_rate.clamp(1.0, 120.0);
     self.mouse_damping = self.mouse_damping.clamp(0.0, 40.0);
+    self.mouse_hover_influence = self.mouse_hover_influence.clamp(0.0, 2.0);
+    self.mouse_press_influence = self.mouse_press_influence.clamp(0.0, 2.0);
   }
 
   /// Update mouse UV from terminal cell coordinates.
@@ -359,6 +379,15 @@ impl ShaderParams {
     self.mouse_x = 0.5;
     self.mouse_y = 0.5;
     self.mouse_influence = 0.0;
+  }
+
+  /// Configured attractor strength for hover vs button-down.
+  pub fn mouse_target_influence(&self, pressed: bool) -> f32 {
+    if pressed {
+      self.mouse_press_influence
+    } else {
+      self.mouse_hover_influence
+    }
   }
 
   /// Second-order inertial step toward a mouse UV / influence target.

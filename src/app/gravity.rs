@@ -5,6 +5,8 @@
 //! never cancel it. Fight amount is low-pass filtered so pointer noise does
 //! not become high-frequency twitch.
 
+use chroma::params::ShaderParams;
+
 /// Max fraction of droop the mouse may cancel (must stay < 1).
 const MOUSE_FIGHT_CAP: f32 = 0.75;
 /// Peak UV sag contribution per gravity unit (before soft saturation).
@@ -16,8 +18,6 @@ const MAX_DROOP: f32 = 1.35;
 const DROOP_TAU_SECONDS: f32 = 0.35;
 /// Seconds to smooth mouse fight (kills twitch from influence flicker).
 const FIGHT_TAU_SECONDS: f32 = 0.35;
-/// `mouse_influence` above hover level counts as pressed (see `mouse.rs`).
-const MOUSE_PRESS_INFLUENCE_THRESHOLD: f32 = 1.01;
 const HOVER_FIGHT_FACTOR: f32 = 0.65;
 
 #[derive(Debug, Clone)]
@@ -41,19 +41,16 @@ impl Default for GravityState {
 
 impl GravityState {
   /// Ease droop depth toward a mouse-fought target. No oscillatory integration.
-  pub fn update(
-    &mut self,
-    gravity: f32,
-    mouse_fight: f32,
-    _mouse_x: f32,
-    _mouse_y: f32,
-    mouse_influence: f32,
-    delta_time: f32,
-  ) {
+  pub fn update(&mut self, params: &ShaderParams, delta_time: f32) {
     let dt = delta_time.clamp(0.0, 0.1);
-    let gravity = gravity.max(0.0);
+    let gravity = params.gravity.max(0.0);
 
-    let raw_fight = raw_mouse_fight(mouse_fight, mouse_influence);
+    let raw_fight = raw_mouse_fight(
+      params.mouse_fight,
+      params.mouse_influence,
+      params.mouse_hover_influence,
+      params.mouse_press_influence,
+    );
     let fight_alpha = 1.0 - (-dt / FIGHT_TAU_SECONDS).exp();
     self.smoothed_fight += (raw_fight - self.smoothed_fight) * fight_alpha;
 
@@ -73,40 +70,62 @@ impl GravityState {
   }
 }
 
-fn raw_mouse_fight(mouse_fight: f32, mouse_influence: f32) -> f32 {
+fn raw_mouse_fight(
+  mouse_fight: f32,
+  mouse_influence: f32,
+  hover_influence: f32,
+  press_influence: f32,
+) -> f32 {
   if mouse_influence <= 0.001 {
     return 0.0;
   }
 
-  let press_boost = if mouse_influence > MOUSE_PRESS_INFLUENCE_THRESHOLD {
+  let press_boost = if mouse_influence > hover_influence + 0.01 {
     1.0
   } else {
     HOVER_FIGHT_FACTOR
   };
   let strength = mouse_fight.clamp(0.0, 1.0) * press_boost;
-  // Map influence 0..~1.75 into 0..1 before applying the hard cap.
-  let influence_t = (mouse_influence / 1.75).clamp(0.0, 1.0);
+  let influence_t = (mouse_influence / press_influence.max(0.001)).clamp(0.0, 1.0);
   (strength * influence_t * MOUSE_FIGHT_CAP).clamp(0.0, MOUSE_FIGHT_CAP)
 }
 
 /// Target droop depth after mouse fight (no smoothing) — for tests.
 #[cfg(test)]
-fn target_droop(gravity: f32, mouse_fight: f32, mouse_influence: f32) -> f32 {
-  let gravity = gravity.max(0.0);
+fn target_droop(params: &ShaderParams) -> f32 {
+  let gravity = params.gravity.max(0.0);
   if gravity <= 0.0001 {
     return 0.0;
   }
-  (gravity * BASE_DROOP * (1.0 - raw_mouse_fight(mouse_fight, mouse_influence))).min(MAX_DROOP)
+  (gravity
+    * BASE_DROOP
+    * (1.0
+      - raw_mouse_fight(
+        params.mouse_fight,
+        params.mouse_influence,
+        params.mouse_hover_influence,
+        params.mouse_press_influence,
+      )))
+  .min(MAX_DROOP)
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
 
+  fn gravity_params(gravity: f32, mouse_fight: f32, mouse_influence: f32) -> ShaderParams {
+    ShaderParams {
+      gravity,
+      mouse_fight,
+      mouse_influence,
+      ..ShaderParams::default()
+    }
+  }
+
   #[test]
   fn mouse_cannot_overpower_gravity() {
-    let without = target_droop(1.0, 1.0, 0.0);
-    let with_mouse = target_droop(1.0, 1.0, 1.75);
+    let without = target_droop(&gravity_params(1.0, 1.0, 0.0));
+    let with_mouse = target_droop(&gravity_params(1.0, 1.0, 1.75));
 
     assert!(without > 0.0);
     assert!(with_mouse > 0.0);
@@ -120,7 +139,7 @@ mod tests {
 
   #[test]
   fn inactive_mouse_leaves_full_droop() {
-    let droop = target_droop(0.8, 1.0, 0.0);
+    let droop = target_droop(&gravity_params(0.8, 1.0, 0.0));
     assert!((droop - 0.8 * BASE_DROOP).abs() < 1e-5);
   }
 
@@ -128,7 +147,7 @@ mod tests {
   fn update_eases_downward_droop_over_time() {
     let mut state = GravityState::default();
     for _ in 0..90 {
-      state.update(1.0, 0.7, 0.5, 0.5, 0.0, 1.0 / 60.0);
+      state.update(&gravity_params(1.0, 0.7, 0.0), 1.0 / 60.0);
     }
     assert!(
       state.offset[1] > BASE_DROOP * 0.5,
@@ -145,7 +164,7 @@ mod tests {
     };
 
     for _ in 0..180 {
-      state.update(0.0, 1.0, 0.2, 0.2, 1.75, 1.0 / 60.0);
+      state.update(&gravity_params(0.0, 1.0, 1.75), 1.0 / 60.0);
     }
 
     assert!(state.offset[1].abs() < 0.02, "droop={}", state.offset[1]);
@@ -153,8 +172,8 @@ mod tests {
 
   #[test]
   fn pressed_mouse_reduces_but_does_not_clear_droop() {
-    let falling = target_droop(1.0, 1.0, 0.0);
-    let fighting = target_droop(1.0, 1.0, 1.75);
+    let falling = target_droop(&gravity_params(1.0, 1.0, 0.0));
+    let fighting = target_droop(&gravity_params(1.0, 1.0, 1.75));
 
     assert!(fighting > 0.0);
     assert!(fighting < falling);
@@ -162,8 +181,8 @@ mod tests {
 
   #[test]
   fn mouse_influence_scales_fight() {
-    let hover = target_droop(1.0, 1.0, 1.0);
-    let pressed = target_droop(1.0, 1.0, 1.75);
+    let hover = target_droop(&gravity_params(1.0, 1.0, 1.0));
+    let pressed = target_droop(&gravity_params(1.0, 1.0, 1.75));
 
     assert!(pressed < hover);
     assert!(pressed > 0.0);
@@ -172,11 +191,11 @@ mod tests {
   #[test]
   fn fight_smoothing_avoids_instant_jumps() {
     let mut state = GravityState::default();
-    state.update(1.0, 1.0, 0.5, 0.5, 0.0, 1.0 / 60.0);
+    state.update(&gravity_params(1.0, 1.0, 0.0), 1.0 / 60.0);
     let baseline = state.offset[1];
 
     // One frame of full press should not instantly collapse droop.
-    state.update(1.0, 1.0, 0.5, 0.2, 1.75, 1.0 / 60.0);
+    state.update(&gravity_params(1.0, 1.0, 1.75), 1.0 / 60.0);
     assert!(
       (state.offset[1] - baseline).abs() < BASE_DROOP * 0.15,
       "droop jumped too hard in one frame: {} -> {}",

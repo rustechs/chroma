@@ -10,8 +10,6 @@ use crossterm::{
 
 use super::{input, DebugLog};
 
-const MOUSE_HOVER_INFLUENCE: f32 = 1.0;
-const MOUSE_PRESS_INFLUENCE: f32 = 1.75;
 const MOUSE_HUE_DRAG_SCALE: f32 = 180.0;
 pub(crate) const MOUSE_SCROLL_SCALE_STEP: f32 = 0.15;
 
@@ -30,6 +28,8 @@ pub struct MouseMotionState {
   pub target_x: f32,
   pub target_y: f32,
   pub target_influence: f32,
+  /// True while a mouse button is held; used to pick hover vs press attractor strength.
+  pub pressed: bool,
   /// After FocusGained, wait for the first mouse event before coasting in.
   pub pending_enter: bool,
 }
@@ -42,6 +42,7 @@ impl Default for MouseMotionState {
       target_x: 0.5,
       target_y: 0.5,
       target_influence: 0.0,
+      pressed: false,
       pending_enter: false,
     }
   }
@@ -60,6 +61,7 @@ impl MouseMotionState {
     self.target_x = 0.5;
     self.target_y = 0.5;
     self.target_influence = 0.0;
+    self.pressed = false;
   }
 
   pub fn mark_focus_gained(&mut self) {
@@ -76,11 +78,13 @@ impl MouseMotionState {
         }
       }
       MouseMode::Entering => {
+        self.target_influence = params.mouse_target_influence(self.pressed);
         if !self.integrate(params, delta_time) {
           self.mode = MouseMode::Tracking;
         }
       }
       MouseMode::Tracking => {
+        self.target_influence = params.mouse_target_influence(self.pressed);
         self.integrate(params, delta_time);
       }
     }
@@ -131,16 +135,14 @@ pub(crate) fn handle_mouse_event(
       MouseMode::Idle | MouseMode::Returning | MouseMode::Entering
     );
 
-  let target_influence = match mouse_event.kind {
-    MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Down(MouseButton::Right) => {
-      MOUSE_PRESS_INFLUENCE
-    }
-    MouseEventKind::Up(MouseButton::Left) | MouseEventKind::Up(MouseButton::Right) => {
-      MOUSE_HOVER_INFLUENCE
-    }
-    MouseEventKind::Drag(MouseButton::Left) => MOUSE_PRESS_INFLUENCE,
-    _ => MOUSE_HOVER_INFLUENCE,
-  };
+  let pressed = matches!(
+    mouse_event.kind,
+    MouseEventKind::Down(MouseButton::Left)
+      | MouseEventKind::Down(MouseButton::Right)
+      | MouseEventKind::Drag(MouseButton::Left)
+  );
+  motion.pressed = pressed;
+  let target_influence = params.mouse_target_influence(pressed);
 
   match mouse_event.kind {
     MouseEventKind::Down(MouseButton::Left) => {
@@ -198,7 +200,8 @@ mod tests {
     motion.mark_focus_gained();
     assert!(motion.pending_enter);
 
-    motion.begin_enter(0.75, 0.25, MOUSE_HOVER_INFLUENCE);
+    let params = ShaderParams::default();
+    motion.begin_enter(0.75, 0.25, params.mouse_hover_influence);
     assert_eq!(motion.mode, MouseMode::Entering);
     assert!(!motion.pending_enter);
     assert!((motion.target_x - 0.75).abs() < f32::EPSILON);
@@ -221,7 +224,7 @@ mod tests {
       mode: MouseMode::Tracking,
       target_x: 0.9,
       target_y: 0.1,
-      target_influence: MOUSE_HOVER_INFLUENCE,
+      target_influence: params.mouse_hover_influence,
       ..MouseMotionState::default()
     };
 
@@ -260,5 +263,23 @@ mod tests {
     assert!((motion.inertia.vel_x - 1.75).abs() < f32::EPSILON);
     assert!((motion.inertia.vel_y + 0.4).abs() < f32::EPSILON);
     assert!((motion.inertia.vel_influence - 0.2).abs() < f32::EPSILON);
+  }
+
+  #[test]
+  fn test_tracking_picks_up_reloaded_hover_influence() {
+    let mut params = ShaderParams {
+      mouse_hover_influence: 0.35,
+      ..ShaderParams::default()
+    };
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Tracking,
+      target_influence: 1.0,
+      pressed: false,
+      ..MouseMotionState::default()
+    };
+
+    motion.tick(&mut params, 1.0 / 60.0);
+
+    assert!((motion.target_influence - 0.35).abs() < f32::EPSILON);
   }
 }
