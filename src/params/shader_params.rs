@@ -14,6 +14,59 @@ fn default_mouse_center() -> f32 {
   0.5
 }
 
+pub const DEFAULT_MOUSE_INERTIA: f32 = 1.35;
+pub const DEFAULT_MOUSE_SPRING_RATE: f32 = 32.0;
+pub const DEFAULT_MOUSE_DAMPING: f32 = 5.5;
+
+fn default_mouse_inertia() -> f32 {
+  DEFAULT_MOUSE_INERTIA
+}
+
+fn default_mouse_spring_rate() -> f32 {
+  DEFAULT_MOUSE_SPRING_RATE
+}
+
+fn default_mouse_damping() -> f32 {
+  DEFAULT_MOUSE_DAMPING
+}
+
+/// Velocity state for the mouse attractor's inertial mass.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MouseInertia {
+  pub vel_x: f32,
+  pub vel_y: f32,
+  pub vel_influence: f32,
+}
+
+fn integrate_inertial(
+  position: f32,
+  velocity: &mut f32,
+  target: f32,
+  dt: f32,
+  mass: f32,
+  stiffness: f32,
+  damping: f32,
+) -> f32 {
+  let force = stiffness * (target - position) - damping * *velocity;
+  let accel = force / mass;
+  *velocity += accel * dt;
+  position + *velocity * dt
+}
+
+fn clamp_inertial(position: &mut f32, velocity: &mut f32, min: f32, max: f32) {
+  if *position < min {
+    *position = min;
+    if *velocity < 0.0 {
+      *velocity = 0.0;
+    }
+  } else if *position > max {
+    *position = max;
+    if *velocity > 0.0 {
+      *velocity = 0.0;
+    }
+  }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShaderParams {
   pub time: f32,
@@ -71,6 +124,16 @@ pub struct ShaderParams {
   pub gravity: f32,
   /// How strongly the mouse may fight gravity (never enough to cancel it). Range: 0.0-1.0
   pub mouse_fight: f32,
+
+  /// Inertial mass of the mouse attractor. Higher values lag and overshoot more.
+  #[serde(default = "default_mouse_inertia")]
+  pub mouse_inertia: f32,
+  /// Spring stiffness toward the cursor (or screen center on return).
+  #[serde(default = "default_mouse_spring_rate")]
+  pub mouse_spring_rate: f32,
+  /// Velocity damping of the mouse attractor. Higher values settle with less bounce.
+  #[serde(default = "default_mouse_damping")]
+  pub mouse_damping: f32,
 
   /// Normalized mouse X in shader UV space (0–1). Runtime-only; not saved to configs.
   #[serde(skip_serializing, default = "default_mouse_center")]
@@ -139,6 +202,9 @@ impl Default for ShaderParams {
 
       gravity: 0.0,
       mouse_fight: 0.7,
+      mouse_inertia: DEFAULT_MOUSE_INERTIA,
+      mouse_spring_rate: DEFAULT_MOUSE_SPRING_RATE,
+      mouse_damping: DEFAULT_MOUSE_DAMPING,
 
       mouse_x: 0.5,
       mouse_y: 0.5,
@@ -263,6 +329,9 @@ impl ShaderParams {
     self.mouse_x = self.mouse_x.clamp(0.0, 1.0);
     self.mouse_y = self.mouse_y.clamp(0.0, 1.0);
     self.mouse_influence = self.mouse_influence.clamp(0.0, 2.0);
+    self.mouse_inertia = self.mouse_inertia.clamp(0.2, 8.0);
+    self.mouse_spring_rate = self.mouse_spring_rate.clamp(1.0, 120.0);
+    self.mouse_damping = self.mouse_damping.clamp(0.0, 40.0);
   }
 
   /// Update mouse UV from terminal cell coordinates.
@@ -292,50 +361,80 @@ impl ShaderParams {
     self.mouse_influence = 0.0;
   }
 
-  /// Soft spring step toward a mouse UV / influence target. Returns true while still animating.
-  pub fn tick_mouse_spring(
+  /// Second-order inertial step toward a mouse UV / influence target.
+  ///
+  /// Position uses an underdamped mass-spring-damper so the attractor can lag
+  /// and overshoot. Influence uses a heavier damper so warp strength does not
+  /// bounce past the hover/press target. Returns true while still animating.
+  pub fn tick_mouse_inertia(
     &mut self,
     delta_time: f32,
     target_x: f32,
     target_y: f32,
     target_influence: f32,
-    vel_x: &mut f32,
-    vel_y: &mut f32,
+    inertia: &mut MouseInertia,
   ) -> bool {
     let dt = delta_time.clamp(0.0, 0.05);
 
-    // Faster underdamped spring: soft bounce, settles in ~0.25–0.35s.
-    const STIFFNESS: f32 = 48.0;
-    const DAMPING: f32 = 12.5;
-    const INFLUENCE_RATE: f32 = 10.0;
+    let mass = self.mouse_inertia.max(0.2);
+    let stiffness = self.mouse_spring_rate;
+    let damping = self.mouse_damping;
+    // Overdamped influence so brightness/warp strength eases without ringing.
+    const INFLUENCE_MASS: f32 = 1.0;
+    const INFLUENCE_STIFFNESS: f32 = 36.0;
+    const INFLUENCE_DAMPING: f32 = 14.5;
 
-    let accel_x = STIFFNESS * (target_x - self.mouse_x) - DAMPING * *vel_x;
-    let accel_y = STIFFNESS * (target_y - self.mouse_y) - DAMPING * *vel_y;
-    *vel_x += accel_x * dt;
-    *vel_y += accel_y * dt;
-    self.mouse_x += *vel_x * dt;
-    self.mouse_y += *vel_y * dt;
+    self.mouse_x = integrate_inertial(
+      self.mouse_x,
+      &mut inertia.vel_x,
+      target_x,
+      dt,
+      mass,
+      stiffness,
+      damping,
+    );
+    self.mouse_y = integrate_inertial(
+      self.mouse_y,
+      &mut inertia.vel_y,
+      target_y,
+      dt,
+      mass,
+      stiffness,
+      damping,
+    );
+    self.mouse_influence = integrate_inertial(
+      self.mouse_influence,
+      &mut inertia.vel_influence,
+      target_influence,
+      dt,
+      INFLUENCE_MASS,
+      INFLUENCE_STIFFNESS,
+      INFLUENCE_DAMPING,
+    );
 
-    let influence_t = 1.0 - (-INFLUENCE_RATE * dt).exp();
-    self.mouse_influence += (target_influence - self.mouse_influence) * influence_t;
+    clamp_inertial(&mut self.mouse_x, &mut inertia.vel_x, 0.0, 1.0);
+    clamp_inertial(&mut self.mouse_y, &mut inertia.vel_y, 0.0, 1.0);
+    clamp_inertial(
+      &mut self.mouse_influence,
+      &mut inertia.vel_influence,
+      0.0,
+      2.0,
+    );
 
     let settled = (self.mouse_x - target_x).abs() < 0.003
       && (self.mouse_y - target_y).abs() < 0.003
       && (self.mouse_influence - target_influence).abs() < 0.02
-      && vel_x.abs() < 0.04
-      && vel_y.abs() < 0.04;
+      && inertia.vel_x.abs() < 0.04
+      && inertia.vel_y.abs() < 0.04
+      && inertia.vel_influence.abs() < 0.04;
 
     if settled {
       self.mouse_x = target_x.clamp(0.0, 1.0);
       self.mouse_y = target_y.clamp(0.0, 1.0);
       self.mouse_influence = target_influence.clamp(0.0, 2.0);
-      *vel_x = 0.0;
-      *vel_y = 0.0;
+      *inertia = MouseInertia::default();
       false
     } else {
-      self.mouse_x = self.mouse_x.clamp(0.0, 1.0);
-      self.mouse_y = self.mouse_y.clamp(0.0, 1.0);
-      self.mouse_influence = self.mouse_influence.clamp(0.0, 2.0);
       true
     }
   }

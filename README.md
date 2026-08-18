@@ -91,7 +91,7 @@ Stream mode skips terminal setup, the status bar, and interactive input. By defa
 - `+`/`-` - Adjust amplitude
 - `[`/`]` - Adjust scale
 - `g`/`G` - Adjust gravity (mouse fights gravity but cannot overpower it)
-- **Mouse** - Move to warp visuals toward the cursor; left-click randomizes; right-click cycles effects; scroll adjusts scale; drag tweaks hue/scale; focus lost/gained soft-springs the attractor out and back in
+- **Mouse** - Move to warp visuals toward the cursor with inertial lag; left-click randomizes; right-click cycles effects; scroll adjusts scale; drag tweaks hue/scale; focus lost/gained lets the attractor coast out and back in
 
 See [CONTROLS.md](./notes/CONTROLS.md) and [PALETTES.md](./notes/PALETTES.md) for more details.
 

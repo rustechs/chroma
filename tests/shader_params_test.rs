@@ -1,6 +1,9 @@
 mod support;
 
-use chroma::params::ShaderParams;
+use chroma::params::{
+  MouseInertia, ShaderParams, DEFAULT_MOUSE_DAMPING, DEFAULT_MOUSE_INERTIA,
+  DEFAULT_MOUSE_SPRING_RATE,
+};
 
 #[test]
 fn test_default_params() {
@@ -11,6 +14,9 @@ fn test_default_params() {
   assert_eq!(params.amplitude, 1.0);
   assert_eq!(params.brightness, 1.2);
   assert_eq!(params.contrast, 1.0);
+  assert_eq!(params.mouse_inertia, DEFAULT_MOUSE_INERTIA);
+  assert_eq!(params.mouse_spring_rate, DEFAULT_MOUSE_SPRING_RATE);
+  assert_eq!(params.mouse_damping, DEFAULT_MOUSE_DAMPING);
 }
 
 #[test]
@@ -280,18 +286,17 @@ fn test_clear_mouse_interaction_restores_defaults() {
 }
 
 #[test]
-fn test_mouse_return_springs_toward_neutral() {
+fn test_mouse_return_coasts_toward_neutral() {
   let mut params = ShaderParams {
     mouse_x: 0.1,
     mouse_y: 0.9,
     mouse_influence: 1.5,
     ..Default::default()
   };
-  let mut vel_x = 0.0;
-  let mut vel_y = 0.0;
+  let mut inertia = MouseInertia::default();
 
-  for _ in 0..90 {
-    let still = params.tick_mouse_spring(1.0 / 60.0, 0.5, 0.5, 0.0, &mut vel_x, &mut vel_y);
+  for _ in 0..180 {
+    let still = params.tick_mouse_inertia(1.0 / 60.0, 0.5, 0.5, 0.0, &mut inertia);
     if !still {
       break;
     }
@@ -303,13 +308,12 @@ fn test_mouse_return_springs_toward_neutral() {
 }
 
 #[test]
-fn test_mouse_enter_springs_toward_cursor() {
+fn test_mouse_enter_coasts_toward_cursor() {
   let mut params = ShaderParams::default();
-  let mut vel_x = 0.0;
-  let mut vel_y = 0.0;
+  let mut inertia = MouseInertia::default();
 
-  for _ in 0..90 {
-    let still = params.tick_mouse_spring(1.0 / 60.0, 0.8, 0.2, 1.0, &mut vel_x, &mut vel_y);
+  for _ in 0..180 {
+    let still = params.tick_mouse_inertia(1.0 / 60.0, 0.8, 0.2, 1.0, &mut inertia);
     if !still {
       break;
     }
@@ -318,6 +322,39 @@ fn test_mouse_enter_springs_toward_cursor() {
   assert!((params.mouse_x - 0.8).abs() < 0.01);
   assert!((params.mouse_y - 0.2).abs() < 0.01);
   assert!((params.mouse_influence - 1.0).abs() < 0.02);
+}
+
+#[test]
+fn test_mouse_inertia_does_not_teleport_in_one_step() {
+  let mut params = ShaderParams::default();
+  let mut inertia = MouseInertia::default();
+
+  let still = params.tick_mouse_inertia(1.0 / 60.0, 0.9, 0.1, 1.0, &mut inertia);
+
+  assert!(still);
+  assert!(params.mouse_x > 0.5);
+  assert!(params.mouse_x < 0.58);
+  assert!(params.mouse_y < 0.5);
+  assert!(params.mouse_y > 0.42);
+  assert!(inertia.vel_x > 0.0);
+  assert!(inertia.vel_y < 0.0);
+}
+
+#[test]
+fn test_mouse_position_overshoots_target() {
+  let mut params = ShaderParams::default();
+  let mut inertia = MouseInertia::default();
+  let mut max_x = params.mouse_x;
+
+  for _ in 0..180 {
+    params.tick_mouse_inertia(1.0 / 60.0, 0.8, 0.5, 1.0, &mut inertia);
+    max_x = max_x.max(params.mouse_x);
+  }
+
+  assert!(
+    max_x > 0.81,
+    "underdamped inertial mass should overshoot the target, max_x={max_x}"
+  );
 }
 
 #[test]
@@ -348,13 +385,75 @@ fn test_save_to_file_omits_runtime_mouse_fields() {
   let path = params.save_to_file_in(&dir).expect("Failed to save");
   let contents = std::fs::read_to_string(&path).expect("Failed to read");
 
-  assert!(!contents.contains("mouse_x"));
-  assert!(!contents.contains("mouse_y"));
-  assert!(!contents.contains("mouse_influence"));
+  assert!(!contents.contains("mouse_x ="));
+  assert!(!contents.contains("mouse_y ="));
+  assert!(!contents.contains("mouse_influence ="));
+  assert!(contents.contains("mouse_inertia"));
+  assert!(contents.contains("mouse_spring_rate"));
+  assert!(contents.contains("mouse_damping"));
 
   let loaded = ShaderParams::load_from_file(&path).expect("Failed to load");
   assert!((loaded.mouse_x - 0.5).abs() < f32::EPSILON);
   assert!((loaded.mouse_y - 0.5).abs() < f32::EPSILON);
   assert_eq!(loaded.mouse_influence, 0.0);
   assert_eq!(loaded.frequency, 12.0);
+  assert!((loaded.mouse_inertia - DEFAULT_MOUSE_INERTIA).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_load_mouse_dynamics_from_toml() {
+  let loaded = ShaderParams::load_from_str(
+    r#"
+frequency = 10.0
+mouse_inertia = 3.5
+mouse_spring_rate = 18.0
+mouse_damping = 4.0
+"#,
+  )
+  .expect("load");
+
+  assert!((loaded.mouse_inertia - 3.5).abs() < f32::EPSILON);
+  assert!((loaded.mouse_spring_rate - 18.0).abs() < f32::EPSILON);
+  assert!((loaded.mouse_damping - 4.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_missing_mouse_dynamics_keep_defaults() {
+  let loaded = ShaderParams::load_from_str("frequency = 11.0").expect("load");
+  assert!((loaded.mouse_inertia - DEFAULT_MOUSE_INERTIA).abs() < f32::EPSILON);
+  assert!((loaded.mouse_spring_rate - DEFAULT_MOUSE_SPRING_RATE).abs() < f32::EPSILON);
+  assert!((loaded.mouse_damping - DEFAULT_MOUSE_DAMPING).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_clamp_mouse_dynamics() {
+  let mut params = ShaderParams {
+    mouse_inertia: 0.01,
+    mouse_spring_rate: 0.0,
+    mouse_damping: 99.0,
+    ..Default::default()
+  };
+  params.clamp_all();
+  assert_eq!(params.mouse_inertia, 0.2);
+  assert_eq!(params.mouse_spring_rate, 1.0);
+  assert_eq!(params.mouse_damping, 40.0);
+}
+
+#[test]
+fn test_heavier_inertia_moves_less_in_one_step() {
+  let mut light = ShaderParams {
+    mouse_inertia: 0.4,
+    ..Default::default()
+  };
+  let mut heavy = ShaderParams {
+    mouse_inertia: 4.0,
+    ..Default::default()
+  };
+  let mut light_inertia = MouseInertia::default();
+  let mut heavy_inertia = MouseInertia::default();
+
+  light.tick_mouse_inertia(1.0 / 60.0, 0.9, 0.5, 1.0, &mut light_inertia);
+  heavy.tick_mouse_inertia(1.0 / 60.0, 0.9, 0.5, 1.0, &mut heavy_inertia);
+
+  assert!(light.mouse_x > heavy.mouse_x);
 }

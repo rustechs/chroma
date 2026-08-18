@@ -88,4 +88,7 @@ mod shader_params;
 pub use color_mode::ColorMode;
 pub use palette_type::PaletteType;
 pub use pattern_type::PatternType;
-pub use shader_params::ShaderParams;
+pub use shader_params::{
+  MouseInertia, ShaderParams, DEFAULT_MOUSE_DAMPING, DEFAULT_MOUSE_INERTIA,
+  DEFAULT_MOUSE_SPRING_RATE,
+};

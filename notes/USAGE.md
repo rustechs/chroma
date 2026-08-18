@@ -20,6 +20,7 @@ Edit `config.toml` in another editor while the app runs:
 - Changes are detected automatically
 - Parameters update in real-time
 - No need to restart the application
+- Mouse attractor feel: `mouse_inertia`, `mouse_spring_rate`, `mouse_damping` (config-only; see [PARAMETERS.md](./PARAMETERS.md))
 
 ## Parameters Explained
 

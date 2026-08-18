@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chroma::{
   ascii::{AsciiConverter, AsciiPalette},
-  params::ShaderParams,
+  params::{MouseInertia, ShaderParams},
 };
 use crossterm::{
   event::{MouseButton, MouseEvent, MouseEventKind},
@@ -26,12 +26,11 @@ pub enum MouseMode {
 #[derive(Debug, Clone)]
 pub struct MouseMotionState {
   pub mode: MouseMode,
-  pub vel_x: f32,
-  pub vel_y: f32,
+  pub inertia: MouseInertia,
   pub target_x: f32,
   pub target_y: f32,
   pub target_influence: f32,
-  /// After FocusGained, wait for the first mouse event before springing in.
+  /// After FocusGained, wait for the first mouse event before coasting in.
   pub pending_enter: bool,
 }
 
@@ -39,8 +38,7 @@ impl Default for MouseMotionState {
   fn default() -> Self {
     Self {
       mode: MouseMode::Idle,
-      vel_x: 0.0,
-      vel_y: 0.0,
+      inertia: MouseInertia::default(),
       target_x: 0.5,
       target_y: 0.5,
       target_influence: 0.0,
@@ -59,8 +57,6 @@ impl MouseMotionState {
 
     self.mode = MouseMode::Returning;
     self.pending_enter = false;
-    self.vel_x = 0.0;
-    self.vel_y = 0.0;
     self.target_x = 0.5;
     self.target_y = 0.5;
     self.target_influence = 0.0;
@@ -72,47 +68,37 @@ impl MouseMotionState {
 
   pub fn tick(&mut self, params: &mut ShaderParams, delta_time: f32) {
     match self.mode {
+      MouseMode::Idle => {}
       MouseMode::Returning => {
-        let still = params.tick_mouse_spring(
-          delta_time,
-          self.target_x,
-          self.target_y,
-          self.target_influence,
-          &mut self.vel_x,
-          &mut self.vel_y,
-        );
-        if !still {
+        if !self.integrate(params, delta_time) {
           params.clear_mouse_interaction();
           *self = Self::default();
         }
       }
       MouseMode::Entering => {
-        let still = params.tick_mouse_spring(
-          delta_time,
-          self.target_x,
-          self.target_y,
-          self.target_influence,
-          &mut self.vel_x,
-          &mut self.vel_y,
-        );
-        if !still {
+        if !self.integrate(params, delta_time) {
           self.mode = MouseMode::Tracking;
-          self.vel_x = 0.0;
-          self.vel_y = 0.0;
-          params.mouse_x = self.target_x;
-          params.mouse_y = self.target_y;
-          params.mouse_influence = self.target_influence;
         }
       }
-      MouseMode::Idle | MouseMode::Tracking => {}
+      MouseMode::Tracking => {
+        self.integrate(params, delta_time);
+      }
     }
+  }
+
+  fn integrate(&mut self, params: &mut ShaderParams, delta_time: f32) -> bool {
+    params.tick_mouse_inertia(
+      delta_time,
+      self.target_x,
+      self.target_y,
+      self.target_influence,
+      &mut self.inertia,
+    )
   }
 
   fn begin_enter(&mut self, target_x: f32, target_y: f32, target_influence: f32) {
     self.mode = MouseMode::Entering;
     self.pending_enter = false;
-    self.vel_x = 0.0;
-    self.vel_y = 0.0;
     self.target_x = target_x;
     self.target_y = target_y;
     self.target_influence = target_influence;
@@ -136,18 +122,10 @@ pub(crate) fn handle_mouse_event(
     show_status_bar,
   );
 
-  let previous_x = if matches!(motion.mode, MouseMode::Entering) {
-    motion.target_x
-  } else {
-    params.mouse_x
-  };
-  let previous_y = if matches!(motion.mode, MouseMode::Entering) {
-    motion.target_y
-  } else {
-    params.mouse_y
-  };
+  let previous_x = motion.target_x;
+  let previous_y = motion.target_y;
 
-  let wants_smooth_enter = motion.pending_enter
+  let wants_inertial_enter = motion.pending_enter
     || matches!(
       motion.mode,
       MouseMode::Idle | MouseMode::Returning | MouseMode::Entering
@@ -188,7 +166,7 @@ pub(crate) fn handle_mouse_event(
     _ => {}
   }
 
-  if wants_smooth_enter {
+  if wants_inertial_enter {
     if motion.mode != MouseMode::Entering {
       motion.begin_enter(target_x, target_y, target_influence);
     } else {
@@ -200,16 +178,8 @@ pub(crate) fn handle_mouse_event(
   } else {
     motion.mode = MouseMode::Tracking;
     motion.pending_enter = false;
-    params.set_mouse_from_terminal(
-      mouse_event.column,
-      mouse_event.row,
-      term_width,
-      term_height,
-      show_status_bar,
-    );
-    params.mouse_influence = target_influence;
-    motion.target_x = params.mouse_x;
-    motion.target_y = params.mouse_y;
+    motion.target_x = target_x;
+    motion.target_y = target_y;
     motion.target_influence = target_influence;
   }
 
@@ -242,5 +212,53 @@ mod tests {
     };
     params.adjust_scale(MOUSE_SCROLL_SCALE_STEP);
     assert!((params.scale - 1.15).abs() < 1e-5);
+  }
+
+  #[test]
+  fn test_tracking_coasts_toward_cursor_without_teleporting() {
+    let mut params = ShaderParams::default();
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Tracking,
+      target_x: 0.9,
+      target_y: 0.1,
+      target_influence: MOUSE_HOVER_INFLUENCE,
+      ..MouseMotionState::default()
+    };
+
+    motion.tick(&mut params, 1.0 / 60.0);
+
+    assert_eq!(motion.mode, MouseMode::Tracking);
+    assert!(params.mouse_x > 0.5);
+    assert!(params.mouse_x < 0.58);
+    assert!(motion.inertia.vel_x > 0.0);
+  }
+
+  #[test]
+  fn test_return_preserves_existing_velocity() {
+    let mut params = ShaderParams {
+      mouse_x: 0.8,
+      mouse_y: 0.4,
+      mouse_influence: 1.0,
+      ..ShaderParams::default()
+    };
+    let mut motion = MouseMotionState {
+      mode: MouseMode::Tracking,
+      inertia: MouseInertia {
+        vel_x: 1.75,
+        vel_y: -0.4,
+        vel_influence: 0.2,
+      },
+      target_x: 0.8,
+      target_y: 0.4,
+      target_influence: 1.0,
+      ..MouseMotionState::default()
+    };
+
+    motion.begin_return(&mut params);
+
+    assert_eq!(motion.mode, MouseMode::Returning);
+    assert!((motion.inertia.vel_x - 1.75).abs() < f32::EPSILON);
+    assert!((motion.inertia.vel_y + 0.4).abs() < f32::EPSILON);
+    assert!((motion.inertia.vel_influence - 0.2).abs() < f32::EPSILON);
   }
 }
