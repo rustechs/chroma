@@ -18,6 +18,8 @@ nix fmt
 - `checks.<system>` exposes package build, Rust tests, clippy, rustfmt, actionlint, and nixfmt checks.
 - `formatter.<system>` is `pkgs.nixfmt`, so `nix fmt` formats Nix files consistently.
 
+Do **not** `cargo install` (or otherwise write `~/.cargo/bin/chroma`) from `nix develop`. The Nix rustc links the binary to a Nix glibc interpreter, so the host PATH binary fails with `required file not found`. Use `nix run` / `nix profile install` for Nix-wrapped installs, or `./scripts/install-host.sh` (host cargo) for a dashboard/`~/.cargo/bin` binary.
+
 Supported systems are `x86_64-linux` and `aarch64-linux`.
 
 ## Toolchains

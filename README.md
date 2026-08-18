@@ -56,7 +56,10 @@ cd chroma
 # Make sure you have ALSA, libpulse, and PipeWire/PulseAudio packages installed,
 # the exact package names may vary depending on your distro.
 
-cargo install --path .
+# Host toolchain only. Do not run cargo install inside `nix develop`:
+# that links ~/.cargo/bin/chroma against Nix glibc and it will not start.
+./scripts/install-host.sh
+# equivalent: cargo install --path . --force
 ```
 
 ## ℹ️ Usage
